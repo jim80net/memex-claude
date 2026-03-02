@@ -45,29 +45,32 @@ User prompt → embed → cosine similarity against skill index → inject top m
 | `session-learning` | Auto-extracted from sessions | UserPromptSubmit |
 | `stop-rule` | Behavioral rules for Stop hook | Stop |
 
-## Installation
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 20+
-- [tsx](https://github.com/privatenumber/tsx) (`npm install -g tsx`)
 - An OpenAI API key (for `text-embedding-3-small` embeddings)
+- `OPENAI_API_KEY` set in your shell environment
 
-### Setup
+## Installation
+
+### Option A: Claude Code plugin (recommended)
 
 ```bash
-# Clone
-git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
-cd ~/projects/claude-skill-router
-
-# Install dependencies
-npm install
-
-# Ensure OPENAI_API_KEY is available in your shell environment
-export OPENAI_API_KEY="sk-..."
+/plugin install jim80net/claude-skill-router
 ```
 
-### Register the hook
+Dependencies are installed automatically on first session start.
+
+The plugin registers hooks and ships with `/claude-skill-router:sleep` and `/claude-skill-router:deep-sleep` skills.
+
+### Option B: Manual hook
+
+```bash
+# Clone and install
+git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
+cd ~/projects/claude-skill-router
+npm install
+```
 
 Add to `~/.claude/settings.json`:
 
@@ -80,7 +83,7 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "node --import tsx ~/projects/claude-skill-router/src/main.ts",
+            "command": "cd ~/projects/claude-skill-router && node --import tsx src/main.ts",
             "timeout": 10
           }
         ]
@@ -90,7 +93,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### Configuration (optional)
+## Configuration (optional)
 
 Create `~/.claude/skill-router.json` to customize behavior:
 
@@ -145,6 +148,8 @@ The actual skill content that gets injected.
 
 ### Memory-skill
 
+A short preference or fact with minimal body:
+
 ```yaml
 ---
 name: prefer-pnpm
@@ -161,11 +166,13 @@ Use `pnpm` instead of `npm` for all operations:
 
 ### Generating queries
 
-If you don't want to write queries manually:
+If you don't want to write queries manually, generate them with an LLM:
 
 ```bash
 OPENAI_API_KEY="$OPENAI_API_KEY" node scripts/generate-queries.mjs [skill-dir]
 ```
+
+Scans `~/.claude/skills/` by default. Pass additional directories as arguments.
 
 ## Scan directories
 
@@ -178,14 +185,14 @@ The router scans these locations for skills:
 | Project memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` |
 | Extra dirs | `skillDirs[]` from config |
 
-## Commands
+## Bundled skills
 
 ### `/sleep` — Migrate memories to skills
 
-Converts MEMORY.md entries into semantically-searchable memory-skills:
+Converts MEMORY.md entries into semantically-searchable memory-skills via LLM classification:
 
 ```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx ~/projects/claude-skill-router/scripts/sleep.mts "$(pwd)" [--dry-run]
+OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx scripts/sleep.mts "$(pwd)" [--dry-run]
 ```
 
 ### `/deep-sleep` — Extract learnings from sessions
@@ -193,7 +200,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx ~/projects/claude-skill-route
 Analyzes past session transcripts to find patterns and create memory-skills:
 
 ```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx ~/projects/claude-skill-router/scripts/deep-sleep.mts "$(pwd)" [--dry-run]
+OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx scripts/deep-sleep.mts "$(pwd)" [--dry-run]
 ```
 
 ## Performance
@@ -206,11 +213,9 @@ OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx ~/projects/claude-skill-route
 ## Development
 
 ```bash
-# Run tests
-npm test
-
-# Type check
-npx tsc --noEmit
+npm install     # install dependencies
+npm test        # run vitest (46 tests)
+npx tsc --noEmit  # type check
 ```
 
 ## License
