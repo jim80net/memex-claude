@@ -1,0 +1,17 @@
+{
+  "name": "claude-skill-router",
+  "version": "0.1.0",
+  "description": "Semantic skill/memory router for Claude Code — injects relevant skills per-turn via hooks",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "tsx": "^4.19.0"
+  }
+}

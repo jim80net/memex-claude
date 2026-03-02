@@ -1,0 +1,28 @@
+# Claude Code Instructions
+
+## Project
+
+Semantic skill/memory router for Claude Code. TypeScript, runs via `node --import tsx`.
+
+## Development
+
+```bash
+npm install          # install deps
+npm test             # run vitest
+npx tsc --noEmit     # type check
+```
+
+## Architecture
+
+- `src/core/` — Shared engine: embeddings, skill-index, cache, config, types
+- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact
+- `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
+- `scripts/` — CLI tools: sleep.mts, deep-sleep.mts, generate-queries.mjs
+- `test/` — Vitest tests mirroring src/ structure
+
+## Conventions
+
+- No build step — TypeScript runs directly via tsx
+- Tests mock `global.fetch` for OpenAI API calls
+- Cache module is mocked in tests to avoid filesystem side effects
+- All paths use `node:path` join + `node:os` homedir — no hardcoded absolute paths

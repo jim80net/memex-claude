@@ -1,0 +1,33 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/**
+ * Encode an absolute path to Claude's project directory name format.
+ * `/home/user/.myproject` → `-home-user--myproject`
+ *
+ * Rules:
+ * - Leading `/` becomes `-`
+ * - Each `/` separator becomes `-`
+ * - Dots `.` become `-`
+ * - Consecutive `-` are preserved (they encode dots/separators)
+ */
+export function encodeProjectPath(cwd: string): string {
+  // Claude Code uses this encoding: replace / with - and . with -
+  // e.g. /home/user/.myproject becomes -home-user--myproject
+  return cwd.replace(/\//g, "-").replace(/\./g, "-");
+}
+
+/**
+ * Get the Claude project memory directory for a given cwd.
+ */
+export function getProjectMemoryDir(cwd: string): string {
+  const encoded = encodeProjectPath(cwd);
+  return join(homedir(), ".claude", "projects", encoded, "memory");
+}
+
+/**
+ * Get the Claude project skills directory for a given cwd.
+ */
+export function getProjectSkillsDir(cwd: string): string {
+  return join(cwd, ".claude", "skills");
+}
