@@ -55,8 +55,9 @@ User prompt → embed → cosine similarity against skill index → inject top m
 
 ### Option A: Claude Code plugin (recommended)
 
-```bash
-/plugin install jim80net/claude-skill-router
+```
+/plugin marketplace add jim80net/claude-skill-router
+/plugin install claude-skill-router
 ```
 
 Dependencies are installed automatically on first session start.
