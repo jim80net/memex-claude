@@ -14,12 +14,22 @@ vi.mock("node:os", async (importOriginal) => {
 
 // Mock cache module to avoid real file I/O
 vi.mock("../src/core/cache.ts", () => ({
-  loadCache: vi.fn().mockResolvedValue({ version: 1, embeddingModel: "text-embedding-3-small", skills: {} }),
+  loadCache: vi.fn().mockResolvedValue({ version: 1, embeddingModel: "Xenova/all-MiniLM-L6-v2", skills: {} }),
   saveCache: vi.fn().mockResolvedValue(undefined),
   getCachedSkill: vi.fn().mockReturnValue(undefined),
   setCachedSkill: vi.fn(),
   removeCachedSkill: vi.fn(),
 }));
+
+// Mock embeddings to avoid loading ONNX model in tests
+const mockEmbedTexts = vi.fn();
+vi.mock("../src/core/embeddings.ts", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/core/embeddings.ts")>();
+  return {
+    ...original,
+    embedTexts: (...args: unknown[]) => mockEmbedTexts(...args),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Frontmatter parsing
@@ -166,13 +176,17 @@ describe("cosineSimilarity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SkillIndex build + search (mocked embeddings API)
+// SkillIndex build + search (mocked embeddings)
 // ---------------------------------------------------------------------------
 
 describe("SkillIndex", () => {
   let testDir: string;
-  const mockFetch = vi.fn();
-  const origFetch = global.fetch;
+
+  function makeEmbeddings(count: number): number[][] {
+    return Array.from({ length: count }, (_, i) =>
+      Array.from({ length: 4 }, (_, j) => (j === i % 4 ? 1 : 0))
+    );
+  }
 
   beforeEach(async () => {
     testDir = join(tmpdir(), `skill-index-test-${Date.now()}`);
@@ -189,38 +203,22 @@ describe("SkillIndex", () => {
       `---\nname: git\ndescription: Git version control operations\n---\n# Git\n\nRun git commands.`
     );
 
-    mockFetch.mockReset();
-    global.fetch = mockFetch;
+    mockEmbedTexts.mockReset();
   });
 
   afterEach(async () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  afterAll(() => {
-    global.fetch = origFetch;
-  });
-
-  function makeEmbeddingResponse(count: number) {
-    const data: Array<{ index: number; embedding: number[] }> = [];
-    for (let i = 0; i < count; i++) {
-      data.push({
-        index: i,
-        embedding: Array.from({ length: 4 }, (_, j) => (j === i % 4 ? 1 : 0)),
-      });
-    }
-    return { ok: true, json: async () => ({ data }) };
-  }
-
   it("builds an index from project skills", async () => {
-    mockFetch.mockResolvedValueOnce(makeEmbeddingResponse(2));
+    mockEmbedTexts.mockResolvedValueOnce(makeEmbeddings(2));
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     expect(index.skillCount).toBe(2);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch.mock.calls[0][0]).toBe("https://api.openai.com/v1/embeddings");
+    expect(mockEmbedTexts).toHaveBeenCalledTimes(1);
+    expect(mockEmbedTexts.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("uses frontmatter queries when present", async () => {
@@ -229,35 +227,26 @@ describe("SkillIndex", () => {
       `---\nname: weather\ndescription: Get weather\nqueries:\n  - "What is the weather?"\n  - "Will it rain?"\n  - "Temperature today"\n---\n# Weather`
     );
     // 3 queries for weather + 1 description fallback for git = 4 total
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        data: [
-          { index: 0, embedding: [1, 0, 0, 0] },
-          { index: 1, embedding: [1, 0, 0, 0] },
-          { index: 2, embedding: [1, 0, 0, 0] },
-          { index: 3, embedding: [0, 1, 0, 0] },
-        ],
-      }),
-    });
+    mockEmbedTexts.mockResolvedValueOnce([
+      [1, 0, 0, 0],
+      [1, 0, 0, 0],
+      [1, 0, 0, 0],
+      [0, 1, 0, 0],
+    ]);
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     expect(index.skillCount).toBe(2);
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-    expect(body.input).toHaveLength(4);
+    expect(mockEmbedTexts.mock.calls[0][0]).toHaveLength(4);
   });
 
   it("search returns results above threshold", async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeEmbeddingResponse(2))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ index: 0, embedding: [1, 0, 0, 0] }] }),
-      });
+    mockEmbedTexts
+      .mockResolvedValueOnce(makeEmbeddings(2))
+      .mockResolvedValueOnce([[1, 0, 0, 0]]);
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     const results = await index.search("what is the weather?", 3, 0.5);
@@ -266,14 +255,11 @@ describe("SkillIndex", () => {
   });
 
   it("search filters results below threshold", async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeEmbeddingResponse(2))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ index: 0, embedding: [1, 0, 0, 0] }] }),
-      });
+    mockEmbedTexts
+      .mockResolvedValueOnce(makeEmbeddings(2))
+      .mockResolvedValueOnce([[1, 0, 0, 0]]);
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     const results = await index.search("weather", 3, 0.65);
@@ -287,14 +273,11 @@ describe("SkillIndex", () => {
       `---\nname: weather\ndescription: Get weather\ntype: memory\n---\nWeather info.`
     );
 
-    mockFetch
-      .mockResolvedValueOnce(makeEmbeddingResponse(2))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ index: 0, embedding: [0.5, 0.5, 0, 0] }] }),
-      });
+    mockEmbedTexts
+      .mockResolvedValueOnce(makeEmbeddings(2))
+      .mockResolvedValueOnce([[0.5, 0.5, 0, 0]]);
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     // Only match "skill" type — weather is "memory", git is "skill"
@@ -305,14 +288,11 @@ describe("SkillIndex", () => {
   });
 
   it("search respects topK limit", async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeEmbeddingResponse(2))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ index: 0, embedding: [1, 1, 0, 0] }] }),
-      });
+    mockEmbedTexts
+      .mockResolvedValueOnce(makeEmbeddings(2))
+      .mockResolvedValueOnce([[1, 1, 0, 0]]);
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     const results = await index.search("anything", 1, 0.0);
@@ -320,7 +300,7 @@ describe("SkillIndex", () => {
   });
 
   it("readSkillContent strips frontmatter and returns body", async () => {
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     const location = join(testDir, ".claude", "skills", "weather", "SKILL.md");
     const content = await index.readSkillContent(location);
     expect(content).toContain("Fetch weather data");
@@ -331,11 +311,11 @@ describe("SkillIndex", () => {
     const emptyDir = join(tmpdir(), `empty-workspace-${Date.now()}`);
     await mkdir(emptyDir, { recursive: true });
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(emptyDir);
 
     expect(index.skillCount).toBe(0);
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockEmbedTexts).not.toHaveBeenCalled();
 
     await rm(emptyDir, { recursive: true, force: true });
   });
@@ -346,9 +326,9 @@ describe("SkillIndex", () => {
       `---\nname: weather\n---\n# Missing description`
     );
     // Only git skill is valid
-    mockFetch.mockResolvedValueOnce(makeEmbeddingResponse(1));
+    mockEmbedTexts.mockResolvedValueOnce(makeEmbeddings(1));
 
-    const index = new SkillIndex({ ...DEFAULT_CONFIG }, "test-key");
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
     await index.build(testDir);
 
     expect(index.skillCount).toBe(1);

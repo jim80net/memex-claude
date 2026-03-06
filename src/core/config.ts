@@ -5,7 +5,7 @@ import type { SkillRouterConfig } from "./types.ts";
 
 export const DEFAULT_CONFIG: SkillRouterConfig = {
   enabled: true,
-  embeddingModel: "text-embedding-3-small",
+  embeddingModel: "Xenova/all-MiniLM-L6-v2",
   cacheTimeMs: 300_000, // 5 min
   skillDirs: [],
   hooks: {
@@ -26,7 +26,7 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
     Stop: {
       enabled: false,
       extractLearnings: true,
-      extractionModel: "gpt-4.1-nano",
+      extractionModel: "",
       behavioralRules: true,
     },
     PreCompact: {

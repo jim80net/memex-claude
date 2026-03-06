@@ -21,34 +21,101 @@ Analyze past session transcripts to extract user preferences, recurring patterns
 
 ## Process
 
-Find the plugin's script directory and run:
+Perform the following steps directly — no external scripts or API keys needed.
 
-```bash
-# If installed as plugin:
-PLUGIN_DIR="$(find ~/.claude/plugins -name 'claude-skill-router' -type d 2>/dev/null | head -1)"
+### 1. Locate transcripts
 
-# If cloned manually:
-PLUGIN_DIR="${PLUGIN_DIR:-$HOME/projects/claude-skill-router}"
+Find session transcripts in the project directory. The path is encoded from the current working directory:
 
-OPENAI_API_KEY="${OPENAI_API_KEY}" node --import tsx "$PLUGIN_DIR/scripts/deep-sleep.mts" "$(pwd)"
+```
+~/.claude/projects/<encoded-cwd>/
 ```
 
-The script:
-1. Finds unprocessed session transcripts (newer than watermark)
-2. Extracts user messages and error-fix sequences from JSONL transcripts
-3. Batches through LLM to extract:
-   - User preference statements ("always use X", "prefer Y")
-   - Troublesome workflows (repeated errors, user corrections)
-   - Recurring patterns and conventions
-4. Deduplicates against existing skills (embedding similarity > 0.85 = skip)
-5. Creates memory-skills from novel extractions
-6. Updates the watermark file
+Where `<encoded-cwd>` is the cwd with `/` replaced by `-` and `.` replaced by `-`.
+
+Look for `.jsonl` files in that directory. Each line is a JSON object with `role` and `content` fields.
+
+Check the watermark file to find unprocessed sessions:
+```
+~/.claude/cache/deep-sleep-watermark
+```
+
+If the watermark exists, only process `.jsonl` files modified after that timestamp. If no watermark exists, process files from the last 7 days. The user may also specify `--since YYYY-MM-DD`.
+
+### 2. Extract user messages
+
+From each transcript, extract lines where `role` is `"user"`. The `content` may be a string or an array of `{type, text}` objects. Collect messages longer than 10 characters.
+
+### 3. Analyze for learnings
+
+Review the collected user messages and identify reusable patterns. Look for:
+
+- **Preferences**: "always use X", "prefer Y over Z", "don't use W"
+- **Recurring corrections**: User repeatedly fixing the same kind of mistake
+- **Workflow patterns**: Multi-step processes the user follows
+- **Tool usage tips**: Guidance about how to use specific tools (Bash, Edit, etc.)
+- **Stop rules**: Patterns in assistant responses that should trigger continuation
+
+Skip one-off requests. Only extract clear, reusable patterns.
+
+### 4. Deduplicate against existing skills
+
+Before creating new skills, check what already exists:
+```bash
+ls <cwd>/.claude/skills/*/SKILL.md ~/.claude/skills/*/SKILL.md 2>/dev/null
+```
+
+Read existing skill names and descriptions. Skip any learning that substantially overlaps with an existing skill.
+
+### 5. Create memory-skills
+
+For each novel learning, create a SKILL.md file:
+
+```
+<cwd>/.claude/skills/<kebab-case-name>/SKILL.md
+```
+
+Use this format:
+
+```yaml
+---
+name: <kebab-case-name>
+description: "<one sentence: when is this useful>"
+type: <memory|skill|workflow|tool-guidance|stop-rule>
+queries:
+  - "<natural query 1>"
+  - "<natural query 2>"
+  - "<natural query 3>"
+  - "<natural query 4>"
+  - "<natural query 5>"
+---
+<the actual instruction or knowledge, 1-5 lines>
+```
+
+Types:
+- **memory**: Preference or fact ("always use pnpm", "API key is in .env")
+- **skill**: Procedure with steps
+- **workflow**: Multi-step ordered process
+- **tool-guidance**: Tips for using a specific tool (Bash, Edit, etc.)
+- **stop-rule**: Pattern to detect in assistant responses that should trigger continuation
+
+### 6. Update watermark
+
+Write the current ISO timestamp to the watermark file:
+```bash
+mkdir -p ~/.claude/cache
+date -u +%Y-%m-%dT%H:%M:%SZ > ~/.claude/cache/deep-sleep-watermark
+```
+
+### 7. Report results
+
+Summarize what was created: number of transcripts processed, learnings found, skills created, and any duplicates skipped.
 
 ## Options
 
+The user may specify:
 - `--dry-run`: Show extracted learnings without creating files
 - `--since <date>`: Process transcripts from this date (ISO format)
-- `--project-scope`: Write skills to `<cwd>/.claude/skills/` (default)
-- `--global-scope`: Write skills to `~/.claude/skills/`
+- `--global-scope`: Write skills to `~/.claude/skills/` instead of `<cwd>/.claude/skills/`
 
 $ARGUMENTS

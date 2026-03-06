@@ -21,7 +21,7 @@ function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
 const BASE_CONFIG: StopHookConfig = {
   enabled: true,
   extractLearnings: false,
-  extractionModel: "gpt-4.1-nano",
+  extractionModel: "",
   behavioralRules: true,
 };
 

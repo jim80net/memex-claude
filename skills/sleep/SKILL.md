@@ -21,49 +21,102 @@ Convert MEMORY.md entries and topic files into memory-skills (SKILL.md files wit
 
 ## Process
 
-Find the plugin's script directory and run:
+Perform the following steps directly — no external scripts or API keys needed.
 
-```bash
-# If installed as plugin:
-PLUGIN_DIR="$(find ~/.claude/plugins -name 'claude-skill-router' -type d 2>/dev/null | head -1)"
+### 1. Locate memory files
 
-# If cloned manually:
-PLUGIN_DIR="${PLUGIN_DIR:-$HOME/projects/claude-skill-router}"
+Find the project's memory directory. The path is encoded from the current working directory:
 
-OPENAI_API_KEY="${OPENAI_API_KEY}" node --import tsx "$PLUGIN_DIR/scripts/sleep.mts" "$(pwd)"
+```
+~/.claude/projects/<encoded-cwd>/memory/MEMORY.md
 ```
 
-The script:
-1. Reads MEMORY.md and all linked topic files for the current project
-2. Parses each `##`/`###` section
-3. Classifies each section via LLM (gpt-4.1-nano):
-   - **Rule/preference** → `type: memory` skill (minimal body, 5 queries)
-   - **Procedural knowledge** → `type: skill` or `type: workflow` (full body, 5 queries)
-   - **Structural reference** (e.g., "See [file.md]") → kept in MEMORY.md as navigation
-4. Generates name, description, and 5 queries for each convertible entry
-5. Writes SKILL.md files to the project's `.claude/skills/` directory
-6. Trims MEMORY.md to a minimal navigation index
+Where `<encoded-cwd>` is the cwd with `/` replaced by `-` and `.` replaced by `-`.
 
-## After Running
+Read `MEMORY.md` and any linked `.md` topic files in the same directory.
 
-1. Verify the generated skills look correct:
-   ```bash
-   ls -la .claude/skills/*/SKILL.md
-   ```
-2. The skill-router cache will auto-rebuild on next invocation (mtime-based)
-3. Test semantic matching by typing a prompt that should trigger one of the migrated memories
+### 2. Parse sections
+
+Split each file into `##` / `###` sections. For each section, note:
+- The heading
+- The body text
+- Any `Triggers:` lines (comma-separated quoted strings)
+
+### 3. Classify each section
+
+For each section with meaningful content (body > 20 chars or has triggers), classify it:
+
+- **memory**: Short preference, rule, or fact (e.g., "use pnpm not npm", "API key is in X file")
+- **skill**: Procedural knowledge with steps (e.g., "how to debug cron errors", "how to deploy")
+- **workflow**: Multi-step process that follows a specific order
+- **keep**: Structural reference (e.g., "See [file.md]"), navigation link, or table of contents entry — these stay in MEMORY.md
+
+### 4. Generate SKILL.md for each convertible section
+
+For each section classified as memory, skill, or workflow, create a SKILL.md file:
+
+```
+<cwd>/.claude/skills/<kebab-case-name>/SKILL.md
+```
+
+Use this format:
+
+```yaml
+---
+name: <kebab-case-name>
+description: "<one sentence describing when this knowledge is needed>"
+type: <memory|skill|workflow>
+queries:
+  - "<natural query 1>"
+  - "<natural query 2>"
+  - "<natural query 3>"
+  - "<natural query 4>"
+  - "<natural query 5>"
+---
+<original section body>
+```
+
+Generate 5 diverse, natural queries a developer would type when they need this knowledge.
+
+### 5. Trim MEMORY.md
+
+Replace MEMORY.md contents with a minimal navigation index:
+
+```markdown
+# Project Memory
+
+> Memories have been migrated to memory-skills for semantic search.
+> Run `/sleep` again to re-migrate after adding new entries.
+
+## <kept sections>
+<body of sections classified as "keep">
+
+## Migrated Skills
+- **<name>** (<type>): <description> → `.claude/skills/<name>/SKILL.md`
+
+## Topic Files
+- [topic-name](topic-file.md)
+```
+
+### 6. Verify
+
+List the created skill files and confirm the migration looks correct:
+```bash
+ls -la <cwd>/.claude/skills/*/SKILL.md
+```
+
+The skill-router cache will auto-rebuild on next hook invocation (mtime-based).
 
 ## What Stays in MEMORY.md
 
 - Table-of-contents references to topic files
-- The `# Project Memory` header and project identification
-- Items explicitly marked as "always inject"
-- Navigation links (these are useful as a fast index)
+- Navigation links (useful as a fast index)
+- Items that are structural references
 
 ## Options
 
+The user may specify:
 - `--dry-run`: Show what would be created without writing files
-- `--project-scope`: Write skills to `<cwd>/.claude/skills/` (default for project memories)
-- `--global-scope`: Write skills to `~/.claude/skills/` (for global memories)
+- `--global-scope`: Write skills to `~/.claude/skills/` instead of `<cwd>/.claude/skills/`
 
 $ARGUMENTS

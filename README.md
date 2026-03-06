@@ -11,26 +11,26 @@ Claude Code's auto-memory system (`MEMORY.md`) injects all memories at session s
 A `UserPromptSubmit` hook that embeds your prompt and matches it against pre-embedded skills and memories using cosine similarity. Only relevant content is injected as `additionalContext`.
 
 ```
-User prompt → embed → cosine similarity against skill index → inject top matches
+User prompt → embed (local ONNX) → cosine similarity against skill index → inject top matches
 ```
 
 ## How it works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Shared Core                          │
-│  SkillIndex ←→ Cache (~/.claude/cache/skill-router.json)│
-│  embeddings (OpenAI text-embedding-3-small)             │
-│  cosineSimilarity, mtime-based rebuild                  │
-└──────────┬──────────────┬───────────────┬───────────────┘
+┌─────────────────────────────────────────────────────┐
+│                    Shared Core                       │
+│  SkillIndex ←→ Cache (~/.claude/cache/skill-router…) │
+│  embeddings (local ONNX via all-MiniLM-L6-v2)       │
+│  cosineSimilarity, mtime-based rebuild               │
+└──────────┬──────────────┬───────────────┬───────────┘
            │              │               │
     ┌──────▼──────┐ ┌────▼─────┐  ┌──────▼──────┐
     │ UserPrompt  │ │   Stop   │  │ PreToolUse  │
     │  Submit     │ │          │  │             │
     │ Match query │ │ Behavioral│ │ Match tool- │
-    │ → inject    │ │ rules +  │  │ specific    │
-    │ skills +    │ │ learning │  │ guidance    │
-    │ memories    │ │ extraction│ │             │
+    │ → inject    │ │ rules    │  │ specific    │
+    │ skills +    │ │          │  │ guidance    │
+    │ memories    │ │          │  │             │
     └─────────────┘ └──────────┘  └─────────────┘
 ```
 
@@ -48,8 +48,8 @@ User prompt → embed → cosine similarity against skill index → inject top m
 ## Prerequisites
 
 - Node.js 20+
-- An OpenAI API key (for `text-embedding-3-small` embeddings)
-- `OPENAI_API_KEY` set in your shell environment
+
+No external API keys required — embeddings run locally via ONNX.
 
 ## Installation
 
@@ -101,7 +101,7 @@ Create `~/.claude/skill-router.json` to customize behavior:
 ```json
 {
   "enabled": true,
-  "embeddingModel": "text-embedding-3-small",
+  "embeddingModel": "Xenova/all-MiniLM-L6-v2",
   "cacheTimeMs": 300000,
   "skillDirs": [],
   "hooks": {
@@ -121,8 +121,6 @@ Create `~/.claude/skill-router.json` to customize behavior:
     },
     "Stop": {
       "enabled": false,
-      "extractLearnings": true,
-      "extractionModel": "gpt-4.1-nano",
       "behavioralRules": true
     }
   }
@@ -165,16 +163,6 @@ Use `pnpm` instead of `npm` for all operations:
 - `pnpm install`, `pnpm add <pkg>`, `pnpm run <script>`
 ```
 
-### Generating queries
-
-If you don't want to write queries manually, generate them with an LLM:
-
-```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" node scripts/generate-queries.mjs [skill-dir]
-```
-
-Scans `~/.claude/skills/` by default. Pass additional directories as arguments.
-
 ## Scan directories
 
 The router scans these locations for skills:
@@ -190,24 +178,17 @@ The router scans these locations for skills:
 
 ### `/sleep` — Migrate memories to skills
 
-Converts MEMORY.md entries into semantically-searchable memory-skills via LLM classification:
-
-```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx scripts/sleep.mts "$(pwd)" [--dry-run]
-```
+Converts MEMORY.md entries into semantically-searchable memory-skills. Claude Code performs the classification and migration directly — no external API calls needed.
 
 ### `/deep-sleep` — Extract learnings from sessions
 
-Analyzes past session transcripts to find patterns and create memory-skills:
-
-```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" node --import tsx scripts/deep-sleep.mts "$(pwd)" [--dry-run]
-```
+Analyzes past session transcripts to find patterns and create memory-skills. Claude Code reads transcripts and extracts learnings directly.
 
 ## Performance
 
-- **Steady-state** (cache hit): ~200ms (one embedding API call for the query)
+- **Steady-state** (cache hit): ~200ms (one local embedding call for the query)
 - **Cold start** (no cache): ~500ms (embed all skills + query)
+- **First run**: Model download (~23MB for all-MiniLM-L6-v2, cached at `~/.claude/cache/models/`)
 - Cache persists at `~/.claude/cache/skill-router.json`
 - Rebuilds only when files change (mtime-gated)
 

@@ -1,36 +1,45 @@
-type OpenAIEmbeddingResponse = {
-  data: Array<{ embedding: number[]; index: number }>;
-};
+import { pipeline, env, type FeatureExtractionPipeline } from "@huggingface/transformers";
+import { join } from "node:path";
+import { homedir } from "node:os";
+
+const DEFAULT_MODEL = "Xenova/all-MiniLM-L6-v2";
+
+// Store model files alongside existing cache
+env.cacheDir = join(homedir(), ".claude", "cache", "models");
+
+// Singleton pipeline — created once per process
+let extractorPromise: Promise<FeatureExtractionPipeline> | null = null;
+let currentModel = "";
+
+function getExtractor(model: string): Promise<FeatureExtractionPipeline> {
+  if (!extractorPromise || currentModel !== model) {
+    currentModel = model;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    extractorPromise = (pipeline as any)("feature-extraction", model, {
+      dtype: "q8",
+    }) as Promise<FeatureExtractionPipeline>;
+  }
+  return extractorPromise;
+}
 
 export async function embedTexts(
   texts: string[],
-  opts: { model: string; apiKey: string }
+  opts: { model?: string } = {}
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const BATCH_SIZE = 2048;
-  const results: number[][] = new Array(texts.length);
+  const model = opts.model || DEFAULT_MODEL;
+  const extractor = await getExtractor(model);
 
-  for (let offset = 0; offset < texts.length; offset += BATCH_SIZE) {
-    const batch = texts.slice(offset, offset + BATCH_SIZE);
-    const response = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${opts.apiKey}`,
-      },
-      body: JSON.stringify({ model: opts.model, input: batch }),
-    });
+  const output = await extractor(texts, { pooling: "mean", normalize: true });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OpenAI embeddings API error ${response.status}: ${text}`);
-    }
-
-    const json = (await response.json()) as OpenAIEmbeddingResponse;
-    for (const item of json.data) {
-      results[offset + item.index] = item.embedding;
-    }
+  // output is a Tensor with shape [batch_size, hidden_dim]
+  const data = output.data as Float32Array;
+  const dims = output.dims as number[];
+  const dim = dims[dims.length - 1];
+  const results: number[][] = [];
+  for (let i = 0; i < texts.length; i++) {
+    results.push(Array.from(data.slice(i * dim, (i + 1) * dim)));
   }
 
   return results;

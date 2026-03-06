@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
 import { loadConfig } from "./core/config.ts";
 import { SkillIndex } from "./core/skill-index.ts";
 import { handleUserPrompt } from "./hooks/user-prompt.ts";
@@ -35,26 +32,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  let apiKey = process.env.OPENAI_API_KEY ?? "";
-  if (!apiKey) {
-    // Fallback: try reading from openclaw config
-    try {
-      const oc = JSON.parse(
-        await readFile(join(homedir(), ".openclaw", "openclaw.json"), "utf-8")
-      );
-      apiKey = oc?.env?.vars?.OPENAI_API_KEY ?? "";
-    } catch {
-      // no openclaw config
-    }
-  }
-  if (!apiKey) {
-    process.stderr.write("skill-router: no OPENAI_API_KEY found, skipping\n");
-    outputResult({});
-    return;
-  }
-
   const cwd = input.cwd || process.cwd();
-  const index = new SkillIndex(config, apiKey);
+  const index = new SkillIndex(config);
 
   // Build index (will use cache for unchanged files)
   try {

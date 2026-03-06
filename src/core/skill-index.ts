@@ -154,10 +154,7 @@ export class SkillIndex {
   private cache: CacheData | null = null;
   private lastBuildTime = 0;
 
-  constructor(
-    private config: SkillRouterConfig,
-    private apiKey: string
-  ) {}
+  constructor(private config: SkillRouterConfig) {}
 
   get skillCount(): number {
     return this.skills.length;
@@ -294,7 +291,6 @@ export class SkillIndex {
       const flatQueries = toEmbed.flatMap((p) => p.queries);
       const flatEmbeddings = await embedTexts(flatQueries, {
         model: this.config.embeddingModel,
-        apiKey: this.apiKey,
       });
 
       let offset = 0;
@@ -371,7 +367,6 @@ export class SkillIndex {
 
     const [queryEmbedding] = await embedTexts([query], {
       model: this.config.embeddingModel,
-      apiKey: this.apiKey,
     });
 
     const scored = candidates.map((skill) => {
