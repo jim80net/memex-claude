@@ -1,5 +1,6 @@
 import type { SkillIndex } from "../core/skill-index.ts";
 import type { HookInput, HookOutput, HookConfig } from "../core/types.ts";
+import { loadSession, saveSession, hasRuleBeenShown, markRuleShown } from "../core/session.ts";
 
 export async function handleUserPrompt(
   input: HookInput,
@@ -9,7 +10,7 @@ export async function handleUserPrompt(
   const prompt = input.prompt;
   if (!prompt || prompt.trim().length === 0) return {};
 
-  // Search for matching skills
+  // Search for matching entries
   const results = await index.search(
     prompt,
     hookConfig.topK,
@@ -19,35 +20,65 @@ export async function handleUserPrompt(
 
   if (results.length === 0) return {};
 
-  // Read and assemble skill content
+  // Load session state for rule disclosure tracking
+  const session = await loadSession(input.session_id);
+
+  // Read and assemble content with type-specific disclosure
   let totalChars = 0;
   const sections: string[] = [];
+  let sessionDirty = false;
 
   for (const result of results) {
-    let content: string;
-    try {
-      content = await index.readSkillContent(result.skill.location);
-    } catch {
-      continue;
+    const { skill, score } = result;
+    const relevance = `${(score * 100).toFixed(0)}%`;
+    let section: string;
+
+    if (skill.type === "rule") {
+      if (hasRuleBeenShown(session, skill.location)) {
+        // Subsequent match: one-liner reminder
+        const reminder = skill.oneLiner || skill.description;
+        section = `## Rule reminder: ${skill.name} (relevance: ${relevance})\n\n${reminder}`;
+      } else {
+        // First match: full content
+        let content: string;
+        try {
+          content = await index.readSkillContent(skill.location);
+        } catch {
+          continue;
+        }
+        section = `## Rule: ${skill.name} (relevance: ${relevance})\n\n${content}`;
+        markRuleShown(session, skill.location);
+        sessionDirty = true;
+      }
+    } else if (skill.type === "memory" || skill.type === "session-learning") {
+      // Memory: always inject full content (they're short)
+      let content: string;
+      try {
+        content = await index.readSkillContent(skill.location);
+      } catch {
+        continue;
+      }
+      section = `## Recalled Memory: ${skill.name} (relevance: ${relevance})\n\n${content}`;
+    } else {
+      // Skill, workflow, tool-guidance: description teaser only
+      section = `## Available Skill: ${skill.name} (relevance: ${relevance})\n\n**${skill.name}**: ${skill.description}\n\nTo use this skill, read the full instructions at: \`${skill.location}\``;
     }
 
-    if (totalChars + content.length > hookConfig.maxInjectedChars) break;
+    if (totalChars + section.length > hookConfig.maxInjectedChars) break;
 
-    const label =
-      result.skill.type === "memory" || result.skill.type === "session-learning"
-        ? "Recalled Memory"
-        : "Matched Skill";
+    sections.push(section);
+    totalChars += section.length;
+  }
 
-    sections.push(
-      `## ${label}: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n**${result.skill.name}**: ${result.skill.description}\n\n${content}`
-    );
-    totalChars += content.length;
+  // Persist session state if rules were shown for the first time
+  if (sessionDirty) {
+    await saveSession(session);
   }
 
   if (sections.length === 0) return {};
 
   const additionalContext = [
-    "The following skills/memories were automatically loaded based on semantic relevance to your message:",
+    "The following was automatically loaded based on semantic relevance to your message:",
     "",
     ...sections,
     "",
@@ -55,13 +86,16 @@ export async function handleUserPrompt(
   ].join("\n");
 
   // Log to stderr (visible in Claude Code verbose mode)
-  const memCount = results.filter(
-    (r) => r.skill.type === "memory" || r.skill.type === "session-learning"
-  ).length;
-  const skillCount = results.length - memCount;
+  const counts = { rules: 0, memories: 0, skills: 0 };
+  for (const r of results) {
+    if (r.skill.type === "rule") counts.rules++;
+    else if (r.skill.type === "memory" || r.skill.type === "session-learning") counts.memories++;
+    else counts.skills++;
+  }
   const parts: string[] = [];
-  if (skillCount > 0) parts.push(`${skillCount} skill${skillCount > 1 ? "s" : ""}`);
-  if (memCount > 0) parts.push(`${memCount} memor${memCount > 1 ? "ies" : "y"}`);
+  if (counts.rules > 0) parts.push(`${counts.rules} rule${counts.rules > 1 ? "s" : ""}`);
+  if (counts.skills > 0) parts.push(`${counts.skills} skill${counts.skills > 1 ? "s" : ""}`);
+  if (counts.memories > 0) parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
   process.stderr.write(
     `skill-router: injected ${parts.join(" + ")} (${totalChars} chars)\n`
   );

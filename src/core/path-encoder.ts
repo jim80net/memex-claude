@@ -31,3 +31,17 @@ export function getProjectMemoryDir(cwd: string): string {
 export function getProjectSkillsDir(cwd: string): string {
   return join(cwd, ".claude", "skills");
 }
+
+/**
+ * Get the global rules directory.
+ */
+export function getGlobalRulesDir(): string {
+  return join(homedir(), ".claude", "rules");
+}
+
+/**
+ * Get the project-local rules directory for a given cwd.
+ */
+export function getProjectRulesDir(cwd: string): string {
+  return join(cwd, ".claude", "rules");
+}

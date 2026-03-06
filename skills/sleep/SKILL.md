@@ -78,25 +78,11 @@ queries:
 
 Generate 5 diverse, natural queries a developer would type when they need this knowledge.
 
-### 5. Trim MEMORY.md
+### 5. Clean up MEMORY.md
 
-Replace MEMORY.md contents with a minimal navigation index:
+Remove migrated sections from MEMORY.md. The skill-router will handle injecting them via semantic search, so they no longer need to live in MEMORY.md.
 
-```markdown
-# Project Memory
-
-> Memories have been migrated to memory-skills for semantic search.
-> Run `/sleep` again to re-migrate after adding new entries.
-
-## <kept sections>
-<body of sections classified as "keep">
-
-## Migrated Skills
-- **<name>** (<type>): <description> → `.claude/skills/<name>/SKILL.md`
-
-## Topic Files
-- [topic-name](topic-file.md)
-```
+If MEMORY.md is now empty, delete it. Otherwise leave only unmigrated content.
 
 ### 6. Verify
 
@@ -106,12 +92,6 @@ ls -la <cwd>/.claude/skills/*/SKILL.md
 ```
 
 The skill-router cache will auto-rebuild on next hook invocation (mtime-based).
-
-## What Stays in MEMORY.md
-
-- Table-of-contents references to topic files
-- Navigation links (useful as a fast index)
-- Items that are structural references
 
 ## Options
 

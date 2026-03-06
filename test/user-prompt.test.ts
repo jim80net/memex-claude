@@ -3,6 +3,14 @@ import { handleUserPrompt } from "../src/hooks/user-prompt.ts";
 import type { SkillIndex } from "../src/core/skill-index.ts";
 import type { HookConfig, HookInput, SkillSearchResult } from "../src/core/types.ts";
 
+// Mock session module to avoid filesystem side effects
+vi.mock("../src/core/session.ts", () => ({
+  loadSession: vi.fn().mockResolvedValue({ sessionId: "test", shownRules: {} }),
+  saveSession: vi.fn().mockResolvedValue(undefined),
+  hasRuleBeenShown: vi.fn().mockReturnValue(false),
+  markRuleShown: vi.fn(),
+}));
+
 function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
   return {
     skillCount: 0,
@@ -18,13 +26,14 @@ const BASE_CONFIG: HookConfig = {
   topK: 3,
   threshold: 0.5,
   maxInjectedChars: 8000,
-  types: ["skill", "memory", "workflow", "session-learning"],
+  types: ["skill", "memory", "workflow", "session-learning", "rule"],
 };
 
 const BASE_INPUT: HookInput = {
   hook_event_name: "UserPromptSubmit",
   prompt: "how do I check the weather?",
   cwd: "/fake/workspace",
+  session_id: "test-session",
 };
 
 describe("handleUserPrompt", () => {
@@ -49,11 +58,11 @@ describe("handleUserPrompt", () => {
     expect(result.additionalContext).toBeUndefined();
   });
 
-  it("injects matched skill content as additionalContext", async () => {
+  it("injects skill teaser (not full content) for skill type", async () => {
     const match: SkillSearchResult = {
       skill: {
         name: "weather",
-        description: "Get weather",
+        description: "Get weather forecasts",
         location: "/fake/skills/weather/SKILL.md",
         type: "skill",
         embeddings: [],
@@ -70,12 +79,15 @@ describe("handleUserPrompt", () => {
     const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG);
 
     expect(result.additionalContext).toBeDefined();
-    expect(result.additionalContext).toContain("Matched Skill: weather");
+    expect(result.additionalContext).toContain("Available Skill: weather");
+    expect(result.additionalContext).toContain("Get weather forecasts");
     expect(result.additionalContext).toContain("92%");
-    expect(result.additionalContext).toContain("Fetch weather data");
+    // Should NOT contain full content — only teaser
+    expect(result.additionalContext).not.toContain("Fetch weather data");
+    expect(result.additionalContext).toContain("read the full instructions at");
   });
 
-  it("labels memory-type skills as Recalled Memory", async () => {
+  it("injects full content for memory type", async () => {
     const match: SkillSearchResult = {
       skill: {
         name: "prefer-bun",
@@ -96,17 +108,75 @@ describe("handleUserPrompt", () => {
     const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG);
 
     expect(result.additionalContext).toContain("Recalled Memory: prefer-bun");
+    expect(result.additionalContext).toContain("Use bun instead of npm.");
+  });
+
+  it("injects full content for rule on first match", async () => {
+    const { hasRuleBeenShown } = await import("../src/core/session.ts");
+    (hasRuleBeenShown as ReturnType<typeof vi.fn>).mockReturnValue(false);
+
+    const match: SkillSearchResult = {
+      skill: {
+        name: "prefer-pnpm",
+        description: "Use pnpm instead of npm",
+        location: "/fake/rules/prefer-pnpm.md",
+        type: "rule",
+        embeddings: [],
+        queries: [],
+        mtime: 0,
+        oneLiner: "Use pnpm, not npm.",
+      },
+      score: 0.85,
+    };
+    const index = makeIndex({
+      search: vi.fn().mockResolvedValue([match]),
+      readSkillContent: vi.fn().mockResolvedValue("Always use pnpm for package management.\n- pnpm install\n- pnpm add <pkg>"),
+    });
+
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG);
+
+    expect(result.additionalContext).toContain("Rule: prefer-pnpm");
+    expect(result.additionalContext).toContain("Always use pnpm for package management.");
+  });
+
+  it("injects one-liner for rule on subsequent match", async () => {
+    const { hasRuleBeenShown } = await import("../src/core/session.ts");
+    (hasRuleBeenShown as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+    const match: SkillSearchResult = {
+      skill: {
+        name: "prefer-pnpm",
+        description: "Use pnpm instead of npm",
+        location: "/fake/rules/prefer-pnpm.md",
+        type: "rule",
+        embeddings: [],
+        queries: [],
+        mtime: 0,
+        oneLiner: "Use pnpm, not npm.",
+      },
+      score: 0.85,
+    };
+    const index = makeIndex({
+      search: vi.fn().mockResolvedValue([match]),
+    });
+
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG);
+
+    expect(result.additionalContext).toContain("Rule reminder: prefer-pnpm");
+    expect(result.additionalContext).toContain("Use pnpm, not npm.");
+    // Should NOT contain full content
+    expect(result.additionalContext).not.toContain("Always use pnpm for package management");
   });
 
   it("respects maxInjectedChars limit", async () => {
     const bigContent = "x".repeat(5000);
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "skill-a", description: "A", location: "/a", type: "skill", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "skill-a", description: "A", location: "/a", type: "memory", embeddings: [], queries: [], mtime: 0 },
         score: 0.9,
       },
       {
-        skill: { name: "skill-b", description: "B", location: "/b", type: "skill", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "skill-b", description: "B", location: "/b", type: "memory", embeddings: [], queries: [], mtime: 0 },
         score: 0.8,
       },
     ];
@@ -144,11 +214,11 @@ describe("handleUserPrompt", () => {
   it("skips unreadable skill files and continues", async () => {
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "bad", description: "bad", location: "/bad", type: "skill", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "bad", description: "bad", location: "/bad", type: "memory", embeddings: [], queries: [], mtime: 0 },
         score: 0.9,
       },
       {
-        skill: { name: "good", description: "good", location: "/good", type: "skill", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "good", description: "good", location: "/good", type: "memory", embeddings: [], queries: [], mtime: 0 },
         score: 0.85,
       },
     ];

@@ -1,20 +1,30 @@
 # claude-skill-router
 
-Semantic skill and memory router for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Injects relevant skills and memories into your session based on what you're actually asking about, instead of loading everything at once.
+Semantic skill, memory, and rule router for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Injects relevant knowledge into your session based on what you're actually working on, instead of loading everything at once.
 
-## Problem
+## Why this exists
 
-Claude Code's auto-memory system (`MEMORY.md`) injects all memories at session start, wasting context window space when most entries aren't relevant. Skills are discovered by name/description but not semantically matched.
+AI coding assistants are essentially paint-by-number systems. You start with a canvas (the model) and a system prompt (the outline of the picture). Then you add your own directives — `CLAUDE.md`, `MEMORY.md`, rules — which are like adding more lines to the coloring book before you begin.
 
-## Solution
+This works well at first. But as you accumulate knowledge — git workflows, ticket tracking conventions, deployment procedures, coding standards, domain-specific patterns — the coloring page gets crowded. Every session starts with *all* of this context loaded, whether it's relevant or not. The LLM's attention is split across git rules when you're debugging CSS, and deployment procedures when you're writing tests. Performance degrades as the corpus grows.
 
-A `UserPromptSubmit` hook that embeds your prompt and matches it against pre-embedded skills and memories using cosine similarity. Only relevant content is injected as `additionalContext`.
+The solution is **gradual disclosure**: start with universal principles only, then bring in additional directives at the point of consumption, when the conversation actually turns toward those specific tasks. When you need to trade a ticker, the relevant know-how appears. When you're deploying, the deployment checklist surfaces. When you're just writing code, nothing extra clutters the context.
+
+This is what the skill-router does. As skills, memories, and rules are created, they are embedded for semantic retrieval. Each type has a disclosure pattern suited to its nature:
+
+- **Skills** — large procedural checklists — are gradually disclosed: a description teaser first, then the full `SKILL.md` when Claude chooses to use it, which may in turn reference other documents and scripts.
+- **Memories** — generally small preferences and facts — are disclosed in full at the moment they become relevant.
+- **Rules** — important guidelines — are disclosed in full when first relevant, then reduced to one-line reminders on subsequent matches, keeping them present without dominating the context.
+
+The result is a system that drives the conversation according to the task at hand. Performance stays consistent even as learnings amass, because the context window carries only what's needed right now.
+
+To manage the growing corpus, two bundled skills handle the lifecycle: **`/sleep`** organizes and migrates memories into semantically-searchable skills, while **`/deep-sleep`** trawls past conversations to extract recurring patterns and preferences. Together, the system learns from how you work, builds a corpus of guidelines, and interjects them at the right moments — becoming more intuitive over time.
+
+## How it works
 
 ```
 User prompt → embed (local ONNX) → cosine similarity against skill index → inject top matches
 ```
-
-## How it works
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -30,20 +40,33 @@ User prompt → embed (local ONNX) → cosine similarity against skill index →
     │ Match query │ │ Behavioral│ │ Match tool- │
     │ → inject    │ │ rules    │  │ specific    │
     │ skills +    │ │          │  │ guidance    │
-    │ memories    │ │          │  │             │
+    │ memories +  │ │          │  │             │
+    │ rules       │ │          │  │             │
     └─────────────┘ └──────────┘  └─────────────┘
 ```
 
-### Skill types
+### Entry types and disclosure
 
-| Type | Description | Matched on |
-|------|-------------|------------|
-| `skill` | Regular skill with full body | UserPromptSubmit |
-| `memory` | Short preference/fact | UserPromptSubmit |
-| `tool-guidance` | Tool-specific tips | PreToolUse |
-| `workflow` | Multi-step procedures | UserPromptSubmit |
-| `session-learning` | Auto-extracted from sessions | UserPromptSubmit |
-| `stop-rule` | Behavioral rules for Stop hook | Stop |
+| Type | First match | Subsequent | Matched on |
+|------|------------|------------|------------|
+| `rule` | Full content | One-liner reminder | UserPromptSubmit |
+| `memory` | Full content | Full content | UserPromptSubmit |
+| `skill` | Description teaser | Full (via Read) | UserPromptSubmit |
+| `workflow` | Description teaser | Full (via Read) | UserPromptSubmit |
+| `tool-guidance` | Full content | Full content | PreToolUse |
+| `session-learning` | Full content | Full content | UserPromptSubmit |
+| `stop-rule` | Behavioral rules for Stop hook | — | Stop |
+
+### Three sources
+
+The router indexes knowledge from three locations, each at global and project scope:
+
+| Source | Global path | Project path |
+|--------|------------|-------------|
+| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` |
+| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` |
+| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — |
+| Extra dirs | — | `skillDirs[]` from config |
 
 ## Prerequisites
 
@@ -110,7 +133,7 @@ Create `~/.claude/skill-router.json` to customize behavior:
       "topK": 3,
       "threshold": 0.5,
       "maxInjectedChars": 8000,
-      "types": ["skill", "memory", "workflow", "session-learning"]
+      "types": ["skill", "memory", "workflow", "session-learning", "rule"]
     },
     "PreToolUse": {
       "enabled": false,
@@ -120,12 +143,48 @@ Create `~/.claude/skill-router.json` to customize behavior:
       "types": ["tool-guidance", "skill"]
     },
     "Stop": {
-      "enabled": false,
-      "behavioralRules": true
+      "enabled": false
     }
   }
 }
 ```
+
+## Rules
+
+Rules in `~/.claude/rules/` and `<project>/.claude/rules/` are automatically indexed. Native Claude Code rule files work as-is — the router extends them with optional frontmatter:
+
+```yaml
+---
+name: prefer-pnpm
+description: "Use pnpm instead of npm"
+type: rule
+one-liner: "Use pnpm, not npm."
+paths:
+  - "package.json"
+hooks:
+  - UserPromptSubmit
+keywords:
+  - pnpm
+  - "package manager"
+queries:
+  - "install dependencies"
+  - "npm install"
+---
+Always use pnpm for all package management operations.
+Use `pnpm install`, `pnpm add <pkg>`, `pnpm run <script>`.
+```
+
+Rules without frontmatter are indexed using the filename as name and the first line as description. Extended frontmatter keys:
+
+| Key | Description |
+|-----|-------------|
+| `one-liner` | Short reminder shown on subsequent matches (defaults to description) |
+| `paths` | Glob patterns for applicable file paths (native Claude Code key) |
+| `hooks` | Which hooks should match this rule |
+| `keywords` | Additional keywords for semantic matching |
+| `queries` | Natural language queries that should trigger this rule |
+
+**Disclosure**: First time a rule matches in a session, the full content is injected. On subsequent matches, only the `one-liner` is shown as a reminder.
 
 ## Creating skills
 
@@ -163,26 +222,15 @@ Use `pnpm` instead of `npm` for all operations:
 - `pnpm install`, `pnpm add <pkg>`, `pnpm run <script>`
 ```
 
-## Scan directories
-
-The router scans these locations for skills:
-
-| Source | Path |
-|--------|------|
-| Global skills | `~/.claude/skills/*/SKILL.md` |
-| Project skills | `<cwd>/.claude/skills/*/SKILL.md` |
-| Project memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` |
-| Extra dirs | `skillDirs[]` from config |
-
 ## Bundled skills
 
-### `/sleep` — Migrate memories to skills
+### `/sleep` — Organize knowledge
 
-Converts MEMORY.md entries into semantically-searchable memory-skills. Claude Code performs the classification and migration directly — no external API calls needed.
+Migrates `MEMORY.md` entries into semantically-searchable skills and rules. Claude Code performs the classification and migration directly — no external API calls needed. Run this after accumulating entries in memory files to keep the corpus organized and searchable.
 
-### `/deep-sleep` — Extract learnings from sessions
+### `/deep-sleep` — Learn from sessions
 
-Analyzes past session transcripts to find patterns and create memory-skills. Claude Code reads transcripts and extracts learnings directly.
+Analyzes past session transcripts to extract recurring patterns, preferences, and corrections. Creates new memory-skills from what it finds. Run this periodically to capture learnings that weren't explicitly saved.
 
 ## Performance
 
@@ -196,7 +244,7 @@ Analyzes past session transcripts to find patterns and create memory-skills. Cla
 
 ```bash
 npm install     # install dependencies
-npm test        # run vitest (46 tests)
+npm test        # run vitest (57 tests)
 npx tsc --noEmit  # type check
 ```
 

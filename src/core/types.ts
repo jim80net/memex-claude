@@ -8,7 +8,8 @@ export type SkillType =
   | "tool-guidance"
   | "workflow"
   | "session-learning"
-  | "stop-rule";
+  | "stop-rule"
+  | "rule";
 
 export type IndexedSkill = {
   name: string;
@@ -18,6 +19,7 @@ export type IndexedSkill = {
   embeddings: number[][];
   queries: string[];
   mtime: number;
+  oneLiner?: string;
 };
 
 export type SkillSearchResult = {
@@ -30,6 +32,10 @@ export type ParsedFrontmatter = {
   description?: string;
   queries?: string[];
   type?: SkillType;
+  paths?: string[];
+  hooks?: string[];
+  keywords?: string[];
+  oneLiner?: string;
   [key: string]: unknown;
 };
 
@@ -49,12 +55,22 @@ export type CachedSkill = {
   embeddings: number[][];
   mtime: number;
   type: SkillType;
+  oneLiner?: string;
 };
 
 export type CacheData = {
   version: 1;
   embeddingModel: string;
   skills: Record<string, CachedSkill>;
+};
+
+// ---------------------------------------------------------------------------
+// Session state
+// ---------------------------------------------------------------------------
+
+export type SessionState = {
+  sessionId: string;
+  shownRules: Record<string, number>; // rule location → timestamp of full injection
 };
 
 // ---------------------------------------------------------------------------

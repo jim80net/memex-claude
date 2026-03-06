@@ -14,7 +14,7 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
       topK: 3,
       threshold: 0.5,
       maxInjectedChars: 8000,
-      types: ["skill", "memory", "workflow", "session-learning"],
+      types: ["skill", "memory", "workflow", "session-learning", "rule"],
     },
     PreToolUse: {
       enabled: false,

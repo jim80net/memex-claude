@@ -102,6 +102,44 @@ queries:
     const { meta } = parseFrontmatter(content);
     expect(meta.type).toBeUndefined();
   });
+
+  it("parses rule frontmatter with paths, hooks, keywords, one-liner", () => {
+    const content = `---
+name: prefer-pnpm
+description: "Use pnpm instead of npm"
+type: rule
+one-liner: "Use pnpm, not npm."
+paths:
+  - "package.json"
+  - "*.ts"
+hooks:
+  - UserPromptSubmit
+  - PreToolUse
+keywords:
+  - pnpm
+  - "package manager"
+queries:
+  - "install dependencies"
+  - "npm install"
+---
+Always use pnpm for all package management.`;
+    const { meta, body } = parseFrontmatter(content);
+    expect(meta.name).toBe("prefer-pnpm");
+    expect(meta.type).toBe("rule");
+    expect(meta.oneLiner).toBe("Use pnpm, not npm.");
+    expect(meta.paths).toEqual(["package.json", "*.ts"]);
+    expect(meta.hooks).toEqual(["UserPromptSubmit", "PreToolUse"]);
+    expect(meta.keywords).toEqual(["pnpm", "package manager"]);
+    expect(meta.queries).toEqual(["install dependencies", "npm install"]);
+    expect(body).toContain("Always use pnpm");
+  });
+
+  it("handles rule files without frontmatter", () => {
+    const content = "Always use pnpm instead of npm.";
+    const { meta, body } = parseFrontmatter(content);
+    expect(meta.name).toBeUndefined();
+    expect(body).toBe(content);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -318,6 +356,48 @@ describe("SkillIndex", () => {
     expect(mockEmbedTexts).not.toHaveBeenCalled();
 
     await rm(emptyDir, { recursive: true, force: true });
+  });
+
+  it("indexes rule files from .claude/rules/", async () => {
+    // Create a rules directory with a rule file
+    await mkdir(join(testDir, ".claude", "rules"), { recursive: true });
+    await writeFile(
+      join(testDir, ".claude", "rules", "prefer-pnpm.md"),
+      `---
+name: prefer-pnpm
+description: "Use pnpm instead of npm"
+type: rule
+one-liner: "Use pnpm, not npm."
+queries:
+  - "install dependencies"
+  - "npm install"
+---
+Always use pnpm for all package management.`
+    );
+
+    // 2 skills + 1 rule (2 queries) = 4 embeddings
+    mockEmbedTexts.mockResolvedValueOnce(makeEmbeddings(4));
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
+    await index.build(testDir);
+
+    expect(index.skillCount).toBe(3);
+  });
+
+  it("indexes rule files without frontmatter using filename as name", async () => {
+    await mkdir(join(testDir, ".claude", "rules"), { recursive: true });
+    await writeFile(
+      join(testDir, ".claude", "rules", "no-console-log.md"),
+      "Do not use console.log in production code. Use a proper logger instead."
+    );
+
+    // 2 skills + 1 rule (1 fallback query) = 3 embeddings
+    mockEmbedTexts.mockResolvedValueOnce(makeEmbeddings(3));
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG });
+    await index.build(testDir);
+
+    expect(index.skillCount).toBe(3);
   });
 
   it("skips SKILL.md files with missing name or description", async () => {

@@ -1,9 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { embedTexts, cosineSimilarity } from "./embeddings.ts";
 import { loadCache, saveCache, getCachedSkill, setCachedSkill } from "./cache.ts";
-import { getProjectMemoryDir, getProjectSkillsDir } from "./path-encoder.ts";
+import { getProjectMemoryDir, getProjectSkillsDir, getGlobalRulesDir, getProjectRulesDir } from "./path-encoder.ts";
 import type {
   SkillRouterConfig,
   IndexedSkill,
@@ -24,17 +24,21 @@ export function parseFrontmatter(content: string): { meta: ParsedFrontmatter; bo
   const frontmatter = match[1];
   const body = match[2];
   const meta: ParsedFrontmatter = {};
-  const queries: string[] = [];
-  let inQueriesBlock = false;
+
+  let currentListKey = "";
+  const listAccumulators: Record<string, string[]> = {};
 
   for (const line of frontmatter.split(/\r?\n/)) {
-    if (inQueriesBlock) {
+    // Continue accumulating list items
+    if (currentListKey) {
       const listItem = line.match(/^\s+-\s+(.*)/);
       if (listItem) {
-        queries.push(listItem[1].replace(/^["']|["']$/g, "").trim());
+        listAccumulators[currentListKey].push(
+          listItem[1].replace(/^["']|["']$/g, "").trim()
+        );
         continue;
       }
-      inQueriesBlock = false;
+      currentListKey = "";
     }
 
     const colonIdx = line.indexOf(":");
@@ -43,13 +47,26 @@ export function parseFrontmatter(content: string): { meta: ParsedFrontmatter; bo
     const rawValue = line.slice(colonIdx + 1).trim();
     const value = rawValue.replace(/^["']|["']$/g, "");
 
+    // Scalar keys
     if (key === "name") meta.name = value;
     if (key === "description") meta.description = value;
     if (key === "type") meta.type = value as SkillType;
-    if (key === "queries" && rawValue === "") inQueriesBlock = true;
+    if (key === "one-liner") meta.oneLiner = value;
+
+    // List keys — start accumulating if value is empty (block list)
+    if (["queries", "paths", "hooks", "keywords"].includes(key)) {
+      if (rawValue === "") {
+        currentListKey = key;
+        listAccumulators[key] = [];
+      }
+    }
   }
 
-  if (queries.length > 0) meta.queries = queries;
+  if (listAccumulators.queries?.length) meta.queries = listAccumulators.queries;
+  if (listAccumulators.paths?.length) meta.paths = listAccumulators.paths;
+  if (listAccumulators.hooks?.length) meta.hooks = listAccumulators.hooks;
+  if (listAccumulators.keywords?.length) meta.keywords = listAccumulators.keywords;
+
   return { meta, body };
 }
 
@@ -145,9 +162,37 @@ async function scanMemoryDir(dir: string): Promise<string[]> {
   return memoryFiles;
 }
 
+async function scanRulesDir(dir: string): Promise<string[]> {
+  const ruleFiles: string[] = [];
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return ruleFiles;
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) continue;
+    ruleFiles.push(join(dir, entry));
+  }
+
+  return ruleFiles;
+}
+
 // ---------------------------------------------------------------------------
 // SkillIndex
 // ---------------------------------------------------------------------------
+
+type ToEmbed = {
+  name: string;
+  description: string;
+  location: string;
+  queries: string[];
+  type: SkillType;
+  mtime: number;
+  body: string;
+  oneLiner?: string;
+};
 
 export class SkillIndex {
   private skills: IndexedSkill[] = [];
@@ -161,7 +206,7 @@ export class SkillIndex {
   }
 
   /**
-   * Build the index by scanning all skill directories and memory files.
+   * Build the index by scanning all skill, rule, and memory directories.
    * Uses cache for unchanged files (mtime-gated).
    */
   async build(cwd: string): Promise<void> {
@@ -174,25 +219,30 @@ export class SkillIndex {
     const globalSkillsDir = join(homedir(), ".claude", "skills");
     const projectSkillsDir = getProjectSkillsDir(cwd);
     const projectMemoryDir = getProjectMemoryDir(cwd);
+    const globalRulesDir = getGlobalRulesDir();
+    const projectRulesDir = getProjectRulesDir(cwd);
 
     const skillDirs = [globalSkillsDir, projectSkillsDir, ...this.config.skillDirs];
 
-    // Scan for SKILL.md files
-    const skillFileArrays = await Promise.all(skillDirs.map(scanSkillDir));
+    // Scan all sources in parallel
+    const [skillFileArrays, memoryFiles, globalRules, projectRules] = await Promise.all([
+      Promise.all(skillDirs.map(scanSkillDir)),
+      scanMemoryDir(projectMemoryDir),
+      scanRulesDir(globalRulesDir),
+      scanRulesDir(projectRulesDir),
+    ]);
     const skillFiles = skillFileArrays.flat();
-
-    // Scan for memory files
-    const memoryFiles = await scanMemoryDir(projectMemoryDir);
+    const ruleFiles = [...globalRules, ...projectRules];
 
     // Stat all files to detect changes
-    type FileInfo = { location: string; mtime: number; isMemory: boolean };
-    const fileInfos: FileInfo[] = [];
+    type FileKind = "skill" | "memory" | "rule";
+    type FileInfo = { location: string; mtime: number; kind: FileKind };
 
     const statPromises = [
       ...skillFiles.map(async (f): Promise<FileInfo | null> => {
         try {
           const s = await stat(f);
-          return { location: f, mtime: s.mtimeMs, isMemory: false };
+          return { location: f, mtime: s.mtimeMs, kind: "skill" };
         } catch {
           return null;
         }
@@ -200,7 +250,15 @@ export class SkillIndex {
       ...memoryFiles.map(async (f): Promise<FileInfo | null> => {
         try {
           const s = await stat(f);
-          return { location: f, mtime: s.mtimeMs, isMemory: true };
+          return { location: f, mtime: s.mtimeMs, kind: "memory" };
+        } catch {
+          return null;
+        }
+      }),
+      ...ruleFiles.map(async (f): Promise<FileInfo | null> => {
+        try {
+          const s = await stat(f);
+          return { location: f, mtime: s.mtimeMs, kind: "rule" };
         } catch {
           return null;
         }
@@ -214,15 +272,6 @@ export class SkillIndex {
     const currentLocations = new Set(statResults.map((s) => s.location));
 
     // Find files that need (re)embedding
-    type ToEmbed = {
-      name: string;
-      description: string;
-      location: string;
-      queries: string[];
-      type: SkillType;
-      mtime: number;
-      body: string;
-    };
     const toEmbed: ToEmbed[] = [];
 
     for (const info of statResults) {
@@ -239,6 +288,7 @@ export class SkillIndex {
             embeddings: cached.embeddings,
             queries: cached.queries,
             mtime: cached.mtime,
+            oneLiner: cached.oneLiner,
           });
         }
         continue;
@@ -248,45 +298,19 @@ export class SkillIndex {
       try {
         const raw = await readFile(info.location, "utf-8");
 
-        if (info.isMemory) {
-          // Parse memory file into sections
-          const sections = parseMemoryFile(raw, info.location);
-          for (const section of sections) {
-            const key = `${info.location}#${section.name}`;
-            const queries =
-              section.queries.length > 0 ? section.queries : [section.description];
-            toEmbed.push({
-              name: section.name,
-              description: section.description,
-              location: key,
-              queries,
-              type: "memory",
-              mtime: info.mtime,
-              body: section.body,
-            });
-          }
+        if (info.kind === "memory") {
+          this.parseMemoryFileForEmbed(raw, info, toEmbed);
+        } else if (info.kind === "rule") {
+          this.parseRuleFileForEmbed(raw, info, toEmbed);
         } else {
-          // Parse SKILL.md
-          const { meta, body } = parseFrontmatter(raw);
-          if (!meta.name || !meta.description) continue;
-          const queries = meta.queries?.length ? meta.queries : [meta.description];
-          const type = meta.type || "skill";
-          toEmbed.push({
-            name: meta.name,
-            description: meta.description,
-            location: info.location,
-            queries,
-            type,
-            mtime: info.mtime,
-            body,
-          });
+          this.parseSkillFileForEmbed(raw, info, toEmbed);
         }
       } catch {
         // Skip unreadable files
       }
     }
 
-    // Embed new/changed skills in one batch
+    // Embed new/changed entries in one batch
     if (toEmbed.length > 0) {
       const flatQueries = toEmbed.flatMap((p) => p.queries);
       const flatEmbeddings = await embedTexts(flatQueries, {
@@ -304,6 +328,7 @@ export class SkillIndex {
           embeddings,
           queries: item.queries,
           mtime: item.mtime,
+          oneLiner: item.oneLiner,
         };
 
         const existing = this.skills.findIndex((s) => s.location === item.location);
@@ -318,13 +343,14 @@ export class SkillIndex {
           embeddings,
           mtime: item.mtime,
           type: item.type,
+          oneLiner: item.oneLiner,
         });
 
         offset += item.queries.length;
       }
     }
 
-    // Remove deleted skills
+    // Remove deleted entries
     this.skills = this.skills.filter((s) => {
       // For memory file sections (location contains #), check the base file
       const baseLocation = s.location.includes("#")
@@ -397,5 +423,82 @@ export class SkillIndex {
     const raw = await readFile(location, "utf-8");
     const { body } = parseFrontmatter(raw);
     return body.trim();
+  }
+
+  // -------------------------------------------------------------------------
+  // Private parsing helpers
+  // -------------------------------------------------------------------------
+
+  private parseSkillFileForEmbed(
+    raw: string,
+    info: { location: string; mtime: number },
+    toEmbed: ToEmbed[]
+  ): void {
+    const { meta, body } = parseFrontmatter(raw);
+    if (!meta.name || !meta.description) return;
+    const queries = meta.queries?.length ? meta.queries : [meta.description];
+    const type = meta.type || "skill";
+    toEmbed.push({
+      name: meta.name,
+      description: meta.description,
+      location: info.location,
+      queries,
+      type,
+      mtime: info.mtime,
+      body,
+      oneLiner: meta.oneLiner,
+    });
+  }
+
+  private parseMemoryFileForEmbed(
+    raw: string,
+    info: { location: string; mtime: number },
+    toEmbed: ToEmbed[]
+  ): void {
+    const sections = parseMemoryFile(raw, info.location);
+    for (const section of sections) {
+      const key = `${info.location}#${section.name}`;
+      const queries =
+        section.queries.length > 0 ? section.queries : [section.description];
+      toEmbed.push({
+        name: section.name,
+        description: section.description,
+        location: key,
+        queries,
+        type: "memory",
+        mtime: info.mtime,
+        body: section.body,
+      });
+    }
+  }
+
+  private parseRuleFileForEmbed(
+    raw: string,
+    info: { location: string; mtime: number },
+    toEmbed: ToEmbed[]
+  ): void {
+    const { meta, body } = parseFrontmatter(raw);
+
+    // Rules may not have frontmatter — derive name from filename
+    const name = meta.name || basename(info.location, ".md");
+    const description = meta.description || body.split("\n")[0]?.trim() || name;
+    const oneLiner = meta.oneLiner || description;
+
+    // Build queries from explicit queries, keywords, and description
+    const queries: string[] = [];
+    if (meta.queries?.length) queries.push(...meta.queries);
+    if (meta.keywords?.length) queries.push(...meta.keywords);
+    if (queries.length === 0) queries.push(description);
+
+    toEmbed.push({
+      name,
+      description,
+      location: info.location,
+      queries,
+      type: "rule",
+      mtime: info.mtime,
+      body,
+      oneLiner,
+    });
   }
 }
