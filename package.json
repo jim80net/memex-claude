@@ -3,6 +3,19 @@
   "version": "0.1.0",
   "description": "Semantic skill/memory router for Claude Code — injects relevant skills per-turn via hooks",
   "license": "MIT",
+  "author": {
+    "name": "Jim Lim",
+    "url": "https://github.com/jim80net"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jim80net/claude-skill-router.git"
+  },
+  "homepage": "https://github.com/jim80net/claude-skill-router#readme",
+  "keywords": ["claude-code", "skills", "memory", "semantic-search", "embeddings", "hooks", "claude"],
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "test": "vitest run",
