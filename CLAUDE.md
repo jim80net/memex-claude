@@ -7,9 +7,9 @@ Semantic skill/memory/rule router for Claude Code. TypeScript, runs via `node --
 ## Development
 
 ```bash
-npm install          # install deps
-npm test             # run vitest
-npx tsc --noEmit     # type check
+pnpm install         # install deps
+pnpm test            # run vitest
+pnpm tsc --noEmit    # type check
 ```
 
 ## Architecture

@@ -93,7 +93,7 @@ The plugin registers hooks and ships with `/claude-skill-router:sleep` and `/cla
 # Clone and install
 git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
 cd ~/projects/claude-skill-router
-npm install
+pnpm install
 ```
 
 Add to `~/.claude/settings.json`:
@@ -243,9 +243,9 @@ Analyzes past session transcripts to extract recurring patterns, preferences, an
 ## Development
 
 ```bash
-npm install     # install dependencies
-npm test        # run vitest (57 tests)
-npx tsc --noEmit  # type check
+pnpm install      # install dependencies
+pnpm test         # run vitest (57 tests)
+pnpm tsc --noEmit # type check
 ```
 
 ## License
