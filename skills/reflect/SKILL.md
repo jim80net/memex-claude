@@ -1,5 +1,5 @@
 ---
-name: compound-learnings
+name: reflect
 description: "Extract learnings from the current conversation and save them as memories, rules, or skills so future sessions benefit from what happened here."
 queries:
   - "save what we learned"
@@ -11,7 +11,7 @@ queries:
   - "consolidate this session"
 ---
 
-# /compound-learnings — Compound Learnings from This Conversation
+# /reflect — Compound Learnings from This Conversation
 
 Review the current conversation to extract corrections, preferences, patterns, and decisions, then save them as memories, rules, or skills so future sessions start smarter.
 
