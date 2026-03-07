@@ -86,10 +86,10 @@ Capture anything that would be lost with the context window:
 Write the plan to a uniquely named file:
 
 ```
-<cwd>/.claude/handoffs/<YYYYMMDD> - <kebab-case-title>.md
+<cwd>/.claude/handoffs/<YYYYMMDD>-<kebab-case-title>.md
 ```
 
-For example: `.claude/handoffs/20260307 - prebuilt-binary-support.md`
+For example: `.claude/handoffs/20260307-prebuilt-binary-support.md`
 
 Use this structure:
 
@@ -145,14 +145,14 @@ Show the handoff document and ask:
 
 Update the file with any corrections.
 
-### 8. Tell the user how to resume
+### 8. Tell the user how to take over
 
 Print the exact command or prompt to start the next session, including the full filename:
 
 ```
-To resume, start a new session and say:
+To continue, start a new session and say:
 
-  Read .claude/handoffs/<YYYYMMDD> - <title>.md and continue from where we left off.
+  /takeover .claude/handoffs/<YYYYMMDD>-<title>.md
 ```
 
 ## Guidelines
