@@ -4,3 +4,10 @@ dist/
 *.tsbuildinfo
 .env
 .env.*
+
+# Prebuilt binary (downloaded by bin/install.sh, not checked in)
+bin/skill-router.bin
+bin/skill-router.exe
+bin/*.so*
+bin/*.dylib
+bin/*.dll

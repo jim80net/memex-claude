@@ -70,9 +70,9 @@ The router indexes knowledge from three locations, each at global and project sc
 
 ## Prerequisites
 
-- Node.js 20+
+No prerequisites — prebuilt binaries are available for all major platforms. No external API keys required — embeddings run locally via ONNX.
 
-No external API keys required — embeddings run locally via ONNX.
+For development, you need Node.js 20+ and pnpm.
 
 ## Installation
 
@@ -83,17 +83,16 @@ No external API keys required — embeddings run locally via ONNX.
 /plugin install claude-skill-router
 ```
 
-Dependencies are installed automatically on first session start.
+The plugin ships with prebuilt binaries. If no binary is available for your platform, it falls back to `node --import tsx` automatically.
 
 The plugin registers hooks and ships with `/claude-skill-router:sleep` and `/claude-skill-router:deep-sleep` skills.
 
-### Option B: Manual hook
+### Option B: Prebuilt binary (manual)
 
 ```bash
-# Clone and install
 git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
 cd ~/projects/claude-skill-router
-pnpm install
+./bin/install.sh   # downloads the right binary for your platform
 ```
 
 Add to `~/.claude/settings.json`:
@@ -107,7 +106,7 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "cd ~/projects/claude-skill-router && node --import tsx src/main.ts",
+            "command": "~/projects/claude-skill-router/bin/skill-router",
             "timeout": 10
           }
         ]
@@ -117,177 +116,19 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-## Configuration (optional)
+### Option C: From source (development)
 
-Create `~/.claude/skill-router.json` to customize behavior:
-
-```json
-{
-  "enabled": true,
-  "embeddingModel": "Xenova/all-MiniLM-L6-v2",
-  "cacheTimeMs": 300000,
-  "skillDirs": [],
-  "sync": {
-    "enabled": false,
-    "repo": "git@github.com:you/claude-corpus.git",
-    "autoPull": true,
-    "autoCommitPush": true,
-    "projectMappings": {}
-  },
-  "hooks": {
-    "UserPromptSubmit": {
-      "enabled": true,
-      "topK": 3,
-      "threshold": 0.5,
-      "maxInjectedChars": 8000,
-      "types": ["skill", "memory", "workflow", "session-learning", "rule"]
-    },
-    "PreToolUse": {
-      "enabled": false,
-      "topK": 2,
-      "threshold": 0.6,
-      "maxInjectedChars": 4000,
-      "types": ["tool-guidance", "skill"]
-    },
-    "Stop": {
-      "enabled": false
-    }
-  }
-}
+```bash
+git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
+cd ~/projects/claude-skill-router
+pnpm install
 ```
 
-## Cross-machine sync
+The `bin/skill-router` wrapper will automatically fall back to `node --import tsx` when no prebuilt binary is present.
 
-The router can sync your growing corpus of rules, skills, and memories across workstations via a private git repo.
+## Configuration
 
-### Setup
-
-1. Create a private git repo (e.g., `github.com/you/claude-corpus`)
-2. Enable sync in `~/.claude/skill-router.json`:
-
-```json
-{
-  "sync": {
-    "enabled": true,
-    "repo": "git@github.com:you/claude-corpus.git"
-  }
-}
-```
-
-### How it works
-
-- **Session start**: pulls latest changes from the remote repo (`git pull --rebase`)
-- **Session end**: copies new/changed rules, skills, and memories into the sync repo, commits, and pushes
-- **Conflict resolution**: markdown conflicts are auto-resolved by keeping both sides
-
-### Sync repo structure
-
-```
-~/.local/share/claude-skill-router/
-├── .git/
-├── rules/                                      # synced global rules
-├── skills/                                     # synced global skills
-│   └── my-skill/SKILL.md
-└── projects/
-    ├── github.com/you/my-project/              # git-identified projects
-    │   └── memory/*.md
-    └── _local/                                 # non-git projects
-        └── -home-you-some-project/
-            └── memory/*.md
-```
-
-### Project identity
-
-Memories are stored per-project. The router resolves project identity using a cascade:
-
-1. **Manual mapping** — `sync.projectMappings` in config (explicit override)
-2. **Git remote URL** — normalized to `host/owner/repo` (handles SSH + HTTPS, strips `.git`)
-3. **Encoded path** — falls back to `_local/<encoded-cwd>` for non-git directories
-
-This means the same git project on different machines (with different checkout paths) maps to the same canonical location in the sync repo.
-
-## Rules
-
-Rules in `~/.claude/rules/` and `<project>/.claude/rules/` are automatically indexed. Native Claude Code rule files work as-is — the router extends them with optional frontmatter:
-
-```yaml
----
-name: prefer-pnpm
-description: "Use pnpm instead of npm"
-type: rule
-one-liner: "Use pnpm, not npm."
-paths:
-  - "package.json"
-hooks:
-  - UserPromptSubmit
-keywords:
-  - pnpm
-  - "package manager"
-queries:
-  - "install dependencies"
-  - "npm install"
----
-Always use pnpm for all package management operations.
-Use `pnpm install`, `pnpm add <pkg>`, `pnpm run <script>`.
-```
-
-Rules without frontmatter are indexed using the filename as name and the first line as description. Extended frontmatter keys:
-
-| Key | Description |
-|-----|-------------|
-| `one-liner` | Short reminder shown on subsequent matches (defaults to description) |
-| `paths` | Glob patterns for applicable file paths (native Claude Code key) |
-| `hooks` | Which hooks should match this rule |
-| `keywords` | Additional keywords for semantic matching |
-| `queries` | Natural language queries that should trigger this rule |
-
-**Disclosure**: First time a rule matches in a session, the full content is injected. On subsequent matches, only the `one-liner` is shown as a reminder.
-
-## Creating skills
-
-Skills live in `~/.claude/skills/<name>/SKILL.md` (global) or `<project>/.claude/skills/<name>/SKILL.md` (project-specific).
-
-### Regular skill
-
-```yaml
----
-name: my-skill
-description: "What this skill does"
-queries:
-  - "when would someone need this"
-  - "another example query"
-  - "third example"
----
-The actual skill content that gets injected.
-```
-
-### Memory-skill
-
-A short preference or fact with minimal body:
-
-```yaml
----
-name: prefer-pnpm
-description: Always use pnpm instead of npm for package management
-type: memory
-queries:
-  - "install dependencies"
-  - "run npm install"
-  - "which package manager"
----
-Use `pnpm` instead of `npm` for all operations:
-- `pnpm install`, `pnpm add <pkg>`, `pnpm run <script>`
-```
-
-## Bundled skills
-
-### `/sleep` — Organize knowledge
-
-Migrates `MEMORY.md` entries into semantically-searchable skills and rules. Claude Code performs the classification and migration directly — no external API calls needed. Run this after accumulating entries in memory files to keep the corpus organized and searchable.
-
-### `/deep-sleep` — Learn from sessions
-
-Analyzes past session transcripts to extract recurring patterns, preferences, and corrections. Creates new memory-skills from what it finds. Run this periodically to capture learnings that weren't explicitly saved.
+Optionally create `~/.claude/skill-router.json` to customize behavior. See [USAGE.md](USAGE.md) for full defaults, all options, and detailed usage including rules, skills, cross-machine sync, and bundled skills.
 
 ## Performance
 
@@ -297,13 +138,9 @@ Analyzes past session transcripts to extract recurring patterns, preferences, an
 - Cache persists at `~/.claude/cache/skill-router.json`
 - Rebuilds only when files change (mtime-gated)
 
-## Development
+## Contributing
 
-```bash
-pnpm install      # install dependencies
-pnpm test         # run vitest (68 tests)
-pnpm tsc --noEmit # type check
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, build instructions, and architecture details.
 
 ## License
 

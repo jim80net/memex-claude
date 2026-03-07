@@ -2,7 +2,7 @@
 
 ## Project
 
-Semantic skill/memory/rule router for Claude Code. TypeScript, runs via `node --import tsx`. No external API keys — embeddings run locally via ONNX.
+Semantic skill/memory/rule router for Claude Code. Ships as prebuilt binaries (via `bun build --compile`), falls back to `node --import tsx` for development. No external API keys — embeddings run locally via ONNX.
 
 ## Development
 
@@ -10,6 +10,7 @@ Semantic skill/memory/rule router for Claude Code. TypeScript, runs via `node --
 pnpm install         # install deps
 pnpm test            # run vitest
 pnpm tsc --noEmit    # type check
+bun run build.ts     # compile standalone binary
 ```
 
 ## Architecture
@@ -17,6 +18,8 @@ pnpm tsc --noEmit    # type check
 - `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, types
 - `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
 - `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
+- `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh)
+- `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep)
 - `test/` — Vitest tests mirroring src/ structure
 
@@ -53,7 +56,7 @@ Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:
 
 ## Conventions
 
-- No build step — TypeScript runs directly via tsx
+- Production: prebuilt binary via `bun build --compile`; development: TypeScript runs directly via tsx
 - Tests mock the `embedTexts` function to avoid loading ONNX models
 - Cache and session modules are mocked in tests to avoid filesystem side effects
 - All paths use `node:path` join + `node:os` homedir — no hardcoded absolute paths

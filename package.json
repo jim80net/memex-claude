@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build": "bun run build.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
