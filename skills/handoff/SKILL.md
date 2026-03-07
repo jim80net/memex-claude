@@ -83,11 +83,13 @@ Capture anything that would be lost with the context window:
 
 ### 6. Write the handoff file
 
-Write the plan to:
+Write the plan to a uniquely named file:
 
 ```
-<cwd>/.claude/handoff.md
+<cwd>/.claude/handoffs/<YYYYMMDD> - <kebab-case-title>.md
 ```
+
+For example: `.claude/handoffs/20260307 - prebuilt-binary-support.md`
 
 Use this structure:
 
@@ -129,7 +131,7 @@ Use this structure:
 ## To Resume
 
 <Exact instructions for the next session to get started, e.g.:>
-1. Read this file: `cat .claude/handoff.md`
+1. Read this file: `cat .claude/handoffs/<filename>.md`
 2. Check out branch: `git checkout <branch>`
 3. Start with: <first remaining task>
 ```
@@ -145,12 +147,12 @@ Update the file with any corrections.
 
 ### 8. Tell the user how to resume
 
-Print the exact command or prompt to start the next session:
+Print the exact command or prompt to start the next session, including the full filename:
 
 ```
 To resume, start a new session and say:
 
-  Read .claude/handoff.md and continue from where we left off.
+  Read .claude/handoffs/<YYYYMMDD> - <title>.md and continue from where we left off.
 ```
 
 ## Guidelines
