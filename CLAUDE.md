@@ -20,7 +20,7 @@ bun run build.ts     # compile standalone binary
 - `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
 - `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
-- `skills/` — Bundled skill definitions (sleep, deep-sleep)
+- `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover)
 - `test/` — Vitest tests mirroring src/ structure
 
 ### Scan sources
@@ -40,6 +40,10 @@ When sync is enabled, the sync repo at `~/.local/share/claude-skill-router/` is 
 - **Memory**: full content always (they're short)
 
 Session state for rule tracking persists at `~/.claude/cache/sessions/<session_id>.json`.
+
+### Match telemetry
+
+The UserPromptSubmit hook records match events to `~/.claude/cache/skill-router-telemetry.json`. Per-entry data includes match count, first/last matched timestamps, and unique session IDs. This telemetry drives the `/sleep` skill's promotion/demotion recommendations (e.g., high-frequency memories → promote to rules, low-frequency rules → demote to skills).
 
 ### Sync
 

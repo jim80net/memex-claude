@@ -1,6 +1,7 @@
 import type { SkillIndex } from "../core/skill-index.ts";
 import type { HookInput, HookOutput, HookConfig } from "../core/types.ts";
 import { loadSession, saveSession, hasRuleBeenShown, markRuleShown } from "../core/session.ts";
+import { loadTelemetry, saveTelemetry, recordMatch } from "../core/telemetry.ts";
 
 export async function handleUserPrompt(
   input: HookInput,
@@ -73,6 +74,19 @@ export async function handleUserPrompt(
   // Persist session state if rules were shown for the first time
   if (sessionDirty) {
     await saveSession(session);
+  }
+
+  // Record match telemetry for lifecycle tracking
+  if (sections.length > 0 && input.session_id) {
+    try {
+      const telemetry = await loadTelemetry();
+      for (const result of results) {
+        recordMatch(telemetry, result.skill.location, input.session_id);
+      }
+      await saveTelemetry(telemetry);
+    } catch {
+      // Telemetry is best-effort — don't fail the hook
+    }
   }
 
   if (sections.length === 0) return {};

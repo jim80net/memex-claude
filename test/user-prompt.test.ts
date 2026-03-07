@@ -11,6 +11,13 @@ vi.mock("../src/core/session.ts", () => ({
   markRuleShown: vi.fn(),
 }));
 
+// Mock telemetry module to avoid filesystem side effects
+vi.mock("../src/core/telemetry.ts", () => ({
+  loadTelemetry: vi.fn().mockResolvedValue({ version: 1, entries: {} }),
+  saveTelemetry: vi.fn().mockResolvedValue(undefined),
+  recordMatch: vi.fn(),
+}));
+
 function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
   return {
     skillCount: 0,
@@ -234,5 +241,35 @@ describe("handleUserPrompt", () => {
 
     expect(result.additionalContext).toContain("good");
     expect(result.additionalContext).not.toContain("bad");
+  });
+
+  it("records telemetry for matched entries", async () => {
+    const { recordMatch } = await import("../src/core/telemetry.ts");
+    (recordMatch as ReturnType<typeof vi.fn>).mockClear();
+
+    const match: SkillSearchResult = {
+      skill: {
+        name: "test-skill",
+        description: "A test skill",
+        location: "/fake/skills/test/SKILL.md",
+        type: "memory",
+        embeddings: [],
+        queries: [],
+        mtime: 0,
+      },
+      score: 0.9,
+    };
+    const index = makeIndex({
+      search: vi.fn().mockResolvedValue([match]),
+      readSkillContent: vi.fn().mockResolvedValue("Test content"),
+    });
+
+    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG);
+
+    expect(recordMatch).toHaveBeenCalledWith(
+      expect.any(Object),
+      "/fake/skills/test/SKILL.md",
+      "test-session"
+    );
   });
 });
