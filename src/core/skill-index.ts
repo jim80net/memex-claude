@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import { embedTexts, cosineSimilarity } from "./embeddings.ts";
 import { loadCache, saveCache, getCachedSkill, setCachedSkill } from "./cache.ts";
 import { getProjectMemoryDir, getProjectSkillsDir, getGlobalRulesDir, getProjectRulesDir } from "./path-encoder.ts";
+import { getSyncRepoPath, getSyncScanDirs } from "./sync.ts";
+import { findMatchingProjectMemoryDirs } from "./project-mapping.ts";
 import type {
   SkillRouterConfig,
   IndexedSkill,
@@ -223,16 +225,34 @@ export class SkillIndex {
     const projectRulesDir = getProjectRulesDir(cwd);
 
     const skillDirs = [globalSkillsDir, projectSkillsDir, ...this.config.skillDirs];
+    const memoryDirs = [projectMemoryDir];
+    const ruleDirs = [globalRulesDir, projectRulesDir];
+
+    // Add sync repo scan paths if sync is enabled
+    if (this.config.sync.enabled) {
+      const syncRepoPath = getSyncRepoPath();
+      const syncDirs = getSyncScanDirs(syncRepoPath);
+      skillDirs.push(syncDirs.skillsDir);
+      ruleDirs.push(syncDirs.rulesDir);
+
+      // Add matching project memory dirs from the sync repo
+      const syncMemDirs = await findMatchingProjectMemoryDirs(
+        cwd,
+        syncRepoPath,
+        this.config.sync
+      );
+      memoryDirs.push(...syncMemDirs);
+    }
 
     // Scan all sources in parallel
-    const [skillFileArrays, memoryFiles, globalRules, projectRules] = await Promise.all([
+    const [skillFileArrays, memoryFileArrays, ruleFileArrays] = await Promise.all([
       Promise.all(skillDirs.map(scanSkillDir)),
-      scanMemoryDir(projectMemoryDir),
-      scanRulesDir(globalRulesDir),
-      scanRulesDir(projectRulesDir),
+      Promise.all(memoryDirs.map(scanMemoryDir)),
+      Promise.all(ruleDirs.map(scanRulesDir)),
     ]);
     const skillFiles = skillFileArrays.flat();
-    const ruleFiles = [...globalRules, ...projectRules];
+    const memoryFiles = memoryFileArrays.flat();
+    const ruleFiles = ruleFileArrays.flat();
 
     // Stat all files to detect changes
     type FileKind = "skill" | "memory" | "rule";

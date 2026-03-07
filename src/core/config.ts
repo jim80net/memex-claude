@@ -8,6 +8,13 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
   embeddingModel: "Xenova/all-MiniLM-L6-v2",
   cacheTimeMs: 300_000, // 5 min
   skillDirs: [],
+  sync: {
+    enabled: false,
+    repo: "",
+    autoPull: true,
+    autoCommitPush: true,
+    projectMappings: {},
+  },
   hooks: {
     UserPromptSubmit: {
       enabled: true,
@@ -53,6 +60,10 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
   if (typeof user.embeddingModel === "string") base.embeddingModel = user.embeddingModel;
   if (typeof user.cacheTimeMs === "number") base.cacheTimeMs = user.cacheTimeMs;
   if (Array.isArray(user.skillDirs)) base.skillDirs = user.skillDirs.map(String);
+
+  if (user.sync) {
+    base.sync = { ...base.sync, ...user.sync };
+  }
 
   if (user.hooks) {
     const uh = user.hooks;

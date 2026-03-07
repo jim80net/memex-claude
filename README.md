@@ -61,12 +61,12 @@ User prompt → embed (local ONNX) → cosine similarity against skill index →
 
 The router indexes knowledge from three locations, each at global and project scope:
 
-| Source | Global path | Project path |
-|--------|------------|-------------|
-| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` |
-| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` |
-| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — |
-| Extra dirs | — | `skillDirs[]` from config |
+| Source | Global path | Project path | Sync repo path |
+|--------|------------|-------------|---------------|
+| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` | `<sync-repo>/rules/*.md` |
+| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` | `<sync-repo>/skills/*/SKILL.md` |
+| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — | `<sync-repo>/projects/<canonical-id>/memory/*.md` |
+| Extra dirs | — | `skillDirs[]` from config | — |
 
 ## Prerequisites
 
@@ -127,6 +127,13 @@ Create `~/.claude/skill-router.json` to customize behavior:
   "embeddingModel": "Xenova/all-MiniLM-L6-v2",
   "cacheTimeMs": 300000,
   "skillDirs": [],
+  "sync": {
+    "enabled": false,
+    "repo": "git@github.com:you/claude-corpus.git",
+    "autoPull": true,
+    "autoCommitPush": true,
+    "projectMappings": {}
+  },
   "hooks": {
     "UserPromptSubmit": {
       "enabled": true,
@@ -148,6 +155,56 @@ Create `~/.claude/skill-router.json` to customize behavior:
   }
 }
 ```
+
+## Cross-machine sync
+
+The router can sync your growing corpus of rules, skills, and memories across workstations via a private git repo.
+
+### Setup
+
+1. Create a private git repo (e.g., `github.com/you/claude-corpus`)
+2. Enable sync in `~/.claude/skill-router.json`:
+
+```json
+{
+  "sync": {
+    "enabled": true,
+    "repo": "git@github.com:you/claude-corpus.git"
+  }
+}
+```
+
+### How it works
+
+- **Session start**: pulls latest changes from the remote repo (`git pull --rebase`)
+- **Session end**: copies new/changed rules, skills, and memories into the sync repo, commits, and pushes
+- **Conflict resolution**: markdown conflicts are auto-resolved by keeping both sides
+
+### Sync repo structure
+
+```
+~/.local/share/claude-skill-router/
+├── .git/
+├── rules/                                      # synced global rules
+├── skills/                                     # synced global skills
+│   └── my-skill/SKILL.md
+└── projects/
+    ├── github.com/you/my-project/              # git-identified projects
+    │   └── memory/*.md
+    └── _local/                                 # non-git projects
+        └── -home-you-some-project/
+            └── memory/*.md
+```
+
+### Project identity
+
+Memories are stored per-project. The router resolves project identity using a cascade:
+
+1. **Manual mapping** — `sync.projectMappings` in config (explicit override)
+2. **Git remote URL** — normalized to `host/owner/repo` (handles SSH + HTTPS, strips `.git`)
+3. **Encoded path** — falls back to `_local/<encoded-cwd>` for non-git directories
+
+This means the same git project on different machines (with different checkout paths) maps to the same canonical location in the sync repo.
 
 ## Rules
 
@@ -244,7 +301,7 @@ Analyzes past session transcripts to extract recurring patterns, preferences, an
 
 ```bash
 pnpm install      # install dependencies
-pnpm test         # run vitest (57 tests)
+pnpm test         # run vitest (68 tests)
 pnpm tsc --noEmit # type check
 ```
 

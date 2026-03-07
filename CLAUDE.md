@@ -14,19 +14,21 @@ pnpm tsc --noEmit    # type check
 
 ## Architecture
 
-- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, types
-- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact
+- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, types
+- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
 - `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
 - `skills/` — Bundled skill definitions (sleep, deep-sleep)
 - `test/` — Vitest tests mirroring src/ structure
 
-### Three scan sources
+### Scan sources
 
-| Source | Global path | Project path |
-|--------|------------|-------------|
-| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` |
-| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` |
-| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — |
+| Source | Global path | Project path | Sync repo path |
+|--------|------------|-------------|---------------|
+| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` | `<sync-repo>/rules/*.md` |
+| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` | `<sync-repo>/skills/*/SKILL.md` |
+| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — | `<sync-repo>/projects/<canonical-id>/memory/*.md` |
+
+When sync is enabled, the sync repo at `~/.local/share/claude-skill-router/` is scanned alongside local paths.
 
 ### Disclosure model
 
@@ -35,6 +37,15 @@ pnpm tsc --noEmit    # type check
 - **Memory**: full content always (they're short)
 
 Session state for rule tracking persists at `~/.claude/cache/sessions/<session_id>.json`.
+
+### Sync
+
+When `sync.enabled` is true in `~/.claude/skill-router.json`, the router syncs rules, skills, and memories via a git repo:
+
+- **SessionStart**: `git pull --rebase` from remote, auto-resolve markdown conflicts
+- **Stop**: copy local changes to sync repo, `git commit && push`
+- **Project identity**: git remote URL → `host/owner/repo`; non-git projects → `_local/<encoded-path>`
+- **Config**: `sync.repo` (git URL), `sync.projectMappings` (manual overrides)
 
 ### Rule frontmatter extensions
 

@@ -110,11 +110,20 @@ export type StopHookConfig = {
   behavioralRules: boolean;
 };
 
+export type SyncConfig = {
+  enabled: boolean;
+  repo: string;
+  autoPull: boolean;
+  autoCommitPush: boolean;
+  projectMappings: Record<string, string>; // local path → canonical project id
+};
+
 export type SkillRouterConfig = {
   enabled: boolean;
   embeddingModel: string;
   cacheTimeMs: number;
   skillDirs: string[];
+  sync: SyncConfig;
   hooks: {
     UserPromptSubmit: HookConfig;
     PreToolUse: HookConfig;

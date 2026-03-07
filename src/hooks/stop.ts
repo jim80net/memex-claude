@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { SkillIndex } from "../core/skill-index.ts";
-import type { HookInput, StopHookConfig } from "../core/types.ts";
+import { syncCommitAndPush } from "../core/sync.ts";
+import type { HookInput, StopHookConfig, SyncConfig } from "../core/types.ts";
 
 /**
  * Stop hook has two roles:
@@ -13,7 +14,8 @@ import type { HookInput, StopHookConfig } from "../core/types.ts";
 export async function handleStop(
   input: HookInput,
   index: SkillIndex,
-  hookConfig: StopHookConfig
+  hookConfig: StopHookConfig,
+  syncConfig?: SyncConfig
 ): Promise<void> {
   // --- Behavioral rules ---
   if (hookConfig.behavioralRules) {
@@ -55,6 +57,17 @@ export async function handleStop(
   // Phase 4 stub: will extract session learnings via LLM and create memory-skills
   if (hookConfig.extractLearnings) {
     // TODO: Implement in Phase 4 with /deep-sleep infrastructure
+  }
+
+  // --- Sync commit + push ---
+  if (syncConfig?.enabled && syncConfig.autoCommitPush) {
+    const cwd = input.cwd || process.cwd();
+    try {
+      const result = await syncCommitAndPush(syncConfig, cwd);
+      process.stderr.write(`skill-router[sync]: ${result}\n`);
+    } catch (err) {
+      process.stderr.write(`skill-router[sync]: commit+push failed: ${err}\n`);
+    }
   }
 }
 
