@@ -15,6 +15,20 @@ queries:
 
 Review the current conversation to extract corrections, preferences, patterns, and decisions, then save them as memories, rules, or skills so future sessions start smarter.
 
+## Context: How the Skill-Router Works
+
+The skill-router indexes entries from well-known directories and matches them to user prompts via semantic similarity. When you create an entry, its `queries` are embedded and compared against future prompts. The router surfaces matching entries automatically — so the quality of your `queries` and `description` directly determines when content appears.
+
+**Disclosure model** — determines how matched content is shown to Claude:
+
+| Type | First match | Subsequent matches |
+|------|------------|--------------------|
+| `rule` | Full content | `one-liner` reminder only |
+| `memory` | Full content | Full content |
+| `skill` | Description teaser | Full content (via Read) |
+
+This means: rules need a good `one-liner`, memories should be short (they're always shown in full), and skills should have an informative `description` (it's all Claude sees until they choose to read more).
+
 ## When to Use
 
 - At the end of a productive session
@@ -56,33 +70,49 @@ For each learning, note *why* it matters — the reasoning, not just the conclus
 
 ### 2. Classify each learning
 
-For each extracted learning, determine the best format:
+For each extracted learning, determine the best type based on the router's disclosure model:
 
-| Format | When to use | Example |
-|--------|------------|---------|
-| **memory** | Short preference or fact (1-3 lines) | "Use pnpm, not npm" |
-| **rule** | Guideline that should be enforced and reminded about | "Always run tests before committing" |
-| **skill** | Procedure with steps, or detailed how-to | "How to debug ONNX loading issues" |
+| Type | When to use | Disclosure | Example |
+|------|------------|------------|---------|
+| `memory` | Short preference or fact (1-5 lines) | Always shown in full | "Use pnpm, not npm" |
+| `rule` | Guideline that needs active enforcement | Full first, then `one-liner` reminder | "Always run tests before committing" |
+| `skill` | Procedure with steps, or detailed how-to | Description teaser, then full on read | "How to debug ONNX loading issues" |
 
-**Rules vs memories**: Use a rule when the learning should trigger a reminder every time it's relevant (with `one-liner` for subsequent matches). Use a memory when it's informational context that's useful but doesn't need active enforcement.
+**Rules vs memories**: Use a rule when you want Claude to be *reminded* every time the topic comes up — the `one-liner` acts as a persistent nudge. Use a memory when the information just needs to be *available* — it's context, not a directive.
+
+**When to use a skill**: Only for genuinely multi-step procedures. If it fits in 5 lines, it's a memory. If it's an imperative ("always do X"), it's a rule.
 
 ### 3. Search for existing related content
 
-For each extracted learning, use the skill-router's own semantic search to find related entries. Type the learning as a natural query in your prompt — the router will surface any existing skills, rules, or memories that match.
+For each extracted learning, search the directories the skill-router indexes to find existing entries that overlap. These are the scan paths:
+
+| Source | Global path | Project path |
+|--------|------------|-------------|
+| Rules | `~/.claude/rules/*.md` | `<cwd>/.claude/rules/*.md` |
+| Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` |
+| Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — |
+
+Where `<encoded-cwd>` is the current working directory with `/` replaced by `-` and `.` replaced by `-` (e.g., `/home/user/.myproject` → `-home-user--myproject`).
+
+**Search procedure:**
+
+1. Use **Glob** to list existing entries across these directories.
+2. **Read** the files that look related (by name or path).
+3. Compare semantically — you are the semantic engine here. Does the existing entry already cover this learning?
 
 For each learning, one of three outcomes:
 
 - **No match** → create a new entry (step 5)
 - **Match exists and is accurate** → skip, it's already covered
-- **Match exists but is incomplete or misleading** → read the existing file and update it with the new insight. Preserve what's correct, fix what's wrong, add what's missing.
+- **Match exists but is incomplete or misleading** → update the existing file with the new insight. Preserve what's correct, fix what's wrong, add what's missing.
 
 ### 4. Determine scope
 
 For each learning, decide where it belongs:
 
-- **Project-scoped** (`<cwd>/.claude/skills/` or `<cwd>/.claude/rules/`) — specific to this codebase
-- **Global** (`~/.claude/skills/` or `~/.claude/rules/`) — applies across all projects
-- **Memory** (`~/.claude/projects/<encoded-cwd>/memory/`) — project-specific facts
+- **Project-scoped** (`<cwd>/.claude/rules/` or `<cwd>/.claude/skills/`) — specific to this codebase
+- **Global** (`~/.claude/rules/` or `~/.claude/skills/`) — applies across all projects
+- **Memory** (`~/.claude/projects/<encoded-cwd>/memory/`) — project-specific facts and preferences
 
 When in doubt, prefer project scope. It's easy to promote later.
 
@@ -90,15 +120,23 @@ When in doubt, prefer project scope. It's easy to promote later.
 
 #### For memories
 
-Add to or create a topic file in the memory directory:
+The memory directory uses Claude Code's path encoding:
 
-```bash
-ENCODED_CWD=$(pwd | sed 's|/|-|g; s|\.|-|g')
-MEMORY_DIR=~/.claude/projects/"$ENCODED_CWD"/memory
-mkdir -p "$MEMORY_DIR"
+```
+~/.claude/projects/<encoded-cwd>/memory/<topic>.md
 ```
 
-Append to an existing topic file or create a new one. Keep memories concise (1-5 lines).
+Where `<encoded-cwd>` is `pwd` with `/` → `-` and `.` → `-`.
+
+Group related memories into topic files (e.g., `tooling.md`, `conventions.md`). Use `##` headings for each entry within a topic file. Optionally add a `Triggers:` line so the router can match them more precisely:
+
+```markdown
+## Prefer pnpm
+Triggers: install dependencies, npm install, which package manager
+Use `pnpm` instead of `npm` for all operations.
+```
+
+Keep memories concise (1-5 lines per entry).
 
 #### For rules
 
@@ -109,14 +147,18 @@ Create `<scope>/.claude/rules/<kebab-name>.md`:
 name: <kebab-name>
 description: "<when this rule applies>"
 type: rule
-one-liner: "<short reminder for subsequent matches>"
+one-liner: "<10-word max reminder shown on subsequent matches>"
 queries:
   - "<natural query 1>"
   - "<natural query 2>"
   - "<natural query 3>"
+keywords:
+  - "<single-word or short phrase for matching>"
 ---
 <Full rule content with rationale>
 ```
+
+The `one-liner` is critical — after the first match in a session, only this short reminder is shown. Make it actionable and specific (e.g., "Use pnpm, not npm" not "Package manager preference").
 
 #### For skills
 
@@ -125,8 +167,7 @@ Create `<scope>/.claude/skills/<kebab-name>/SKILL.md`:
 ```yaml
 ---
 name: <kebab-name>
-description: "<one sentence: when is this useful>"
-type: <skill|memory|workflow>
+description: "<one sentence: what this does — shown as teaser until Claude reads the full skill>"
 queries:
   - "<natural query 1>"
   - "<natural query 2>"
@@ -134,18 +175,26 @@ queries:
   - "<natural query 4>"
   - "<natural query 5>"
 ---
-<The actual content>
+<The actual multi-step content>
 ```
 
-Generate 3-5 diverse, natural queries a developer would type when they need this knowledge.
+The `description` is the teaser — it's all Claude sees until choosing to read the full skill. Make it clear enough to decide relevance from the description alone.
+
+#### Query quality
+
+For all types, `queries` determine when the entry surfaces. Write 3-5 diverse, natural queries a developer would actually type:
+
+- Vary phrasing (imperative, question, keyword-style)
+- Include the problem, not just the solution ("tests failing on CI" not just "CI configuration")
+- Avoid generic queries like "help" or "how to code"
 
 ### 6. Report results
 
 Present a summary:
 - Number of learnings extracted
 - What was created (with file paths) grouped by type
-- What was skipped (duplicates or too session-specific)
-- What existing content was updated
+- What was skipped (already covered by existing entries)
+- What existing content was updated (with file paths)
 
 Ask the user to confirm before writing, or if they passed `--dry-run`, just show the plan.
 
@@ -153,9 +202,9 @@ Ask the user to confirm before writing, or if they passed `--dry-run`, just show
 
 - **Be selective.** Not everything in a conversation is worth saving. Skip one-off requests, transient debugging, and anything too specific to the current task.
 - **Capture the why.** "Use pnpm" is less useful than "Use pnpm because the project uses pnpm-lock.yaml and the CI is configured for it."
-- **Prefer updating over creating.** If an existing memory or rule covers the same topic, extend it rather than creating a parallel entry.
-- **Keep it concise.** Memories should be 1-5 lines. Rules should fit on a screen. Only create a full skill for genuinely multi-step procedures.
-- **Test the queries.** Each query should be something a developer would actually type when they need this knowledge. Avoid generic queries like "help" or "how to code."
+- **Prefer updating over creating.** If an existing entry covers the same topic, extend it rather than creating a parallel entry. Two entries about the same thing split the router's attention.
+- **Keep it concise.** Memories: 1-5 lines. Rules: fit on a screen. Only create a full skill for genuinely multi-step procedures.
+- **Write for the router.** Good `queries`, `one-liner`, and `description` fields are what make the system work. A perfectly written rule that never surfaces is worthless.
 
 ## Options
 
