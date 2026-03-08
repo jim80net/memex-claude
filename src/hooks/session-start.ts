@@ -1,8 +1,10 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { syncPull } from "../core/sync.ts";
 import { loadRegistry, saveRegistry, registerProject } from "../core/project-registry.ts";
 import type { HookInput, HookOutput, SyncConfig, SleepScheduleConfig } from "../core/types.ts";
@@ -12,11 +14,17 @@ const execFileAsync = promisify(execFile);
 const CRON_WATERMARK_PATH = join(homedir(), ".claude", "cache", "skill-router-cron-watermark");
 const CRON_MARKER = "skill-router-sleep";
 
+/** Resolve the plugin root from this file's location (src/hooks/session-start.ts → root). */
+function getPluginRoot(): string {
+  const thisFile = fileURLToPath(import.meta.url);
+  return join(dirname(thisFile), "..", "..");
+}
+
 /**
  * SessionStart hook:
  * 1. Register project in known-projects registry
  * 2. Pull latest content from sync remote
- * 3. Check if lifecycle cron needs setup
+ * 3. Check if sleep schedule cron needs setup
  */
 export async function handleSessionStart(
   input: HookInput,
@@ -89,8 +97,11 @@ async function hasCronEntry(): Promise<boolean> {
  */
 async function writeCronWatermark(): Promise<void> {
   try {
-    await mkdir(dirname(CRON_WATERMARK_PATH), { recursive: true });
-    await writeFile(CRON_WATERMARK_PATH, new Date().toISOString(), "utf-8");
+    const dir = dirname(CRON_WATERMARK_PATH);
+    await mkdir(dir, { recursive: true });
+    const tmpPath = CRON_WATERMARK_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
+    await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+    await rename(tmpPath, CRON_WATERMARK_PATH);
   } catch {
     // Best-effort
   }
@@ -116,7 +127,7 @@ function buildCronSetupInstructions(config: SleepScheduleConfig): string {
     "",
     "```bash",
     `# ${CRON_MARKER}`,
-    `${m} ${h} * * * ${join(homedir(), ".claude", "plugins", "cache", "jim80net-plugins", "claude-skill-router")}/_active/bin/sleep-schedule.sh`,
+    `${m} ${h} * * * ${join(getPluginRoot(), "bin", "sleep-schedule.sh")}`,
     "```",
     "",
     "Use `crontab -l` to list current entries, then `crontab -` to write the updated list.",

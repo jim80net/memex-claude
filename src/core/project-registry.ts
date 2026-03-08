@@ -1,6 +1,7 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
+import { randomBytes } from "node:crypto";
 
 const REGISTRY_PATH = join(homedir(), ".claude", "cache", "skill-router-projects.json");
 
@@ -28,7 +29,10 @@ export async function loadRegistry(): Promise<ProjectRegistry> {
 export async function saveRegistry(data: ProjectRegistry): Promise<void> {
   const dir = dirname(REGISTRY_PATH);
   await mkdir(dir, { recursive: true });
-  await writeFile(REGISTRY_PATH, JSON.stringify(data, null, 2), "utf-8");
+
+  const tmpPath = REGISTRY_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
+  await writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+  await rename(tmpPath, REGISTRY_PATH);
 }
 
 /**

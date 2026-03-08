@@ -4,9 +4,6 @@
 # Intended to be called from system cron.
 set -e
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$DIR/.." && pwd)"
-
 CONFIG="$HOME/.claude/skill-router.json"
 REGISTRY="$HOME/.claude/cache/skill-router-projects.json"
 LOG="$HOME/.claude/cache/skill-router-sleep-schedule.log"
@@ -54,12 +51,12 @@ echo "$PROJECTS" | while IFS= read -r project; do
   fi
 
   log "Running /sleep for $project"
-  echo "/claude-skill-router:sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /sleep failed for $project"
+  echo "/claude-skill-router:sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /sleep failed for $project (exit $?)"
 
   log "Running /deep-sleep for $project"
-  echo "/claude-skill-router:deep-sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /deep-sleep failed for $project"
+  echo "/claude-skill-router:deep-sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /deep-sleep failed for $project (exit $?)"
 
   log "Done: $project"
 done
 
-log "Lifecycle run complete"
+log "Sleep schedule run complete"

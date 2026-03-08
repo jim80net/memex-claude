@@ -27,6 +27,7 @@ export async function handleUserPrompt(
   // Read and assemble content with type-specific disclosure
   let totalChars = 0;
   const sections: string[] = [];
+  const injectedLocations: string[] = [];
   let sessionDirty = false;
 
   for (const result of results) {
@@ -68,6 +69,7 @@ export async function handleUserPrompt(
     if (totalChars + section.length > hookConfig.maxInjectedChars) break;
 
     sections.push(section);
+    injectedLocations.push(skill.location);
     totalChars += section.length;
   }
 
@@ -76,17 +78,16 @@ export async function handleUserPrompt(
     await saveSession(session);
   }
 
-  // Record match telemetry for lifecycle tracking
-  if (sections.length > 0 && input.session_id) {
+  // Record match telemetry only for entries that were actually injected
+  if (injectedLocations.length > 0 && input.session_id) {
     try {
       const telemetry = await loadTelemetry();
-      for (const result of results) {
-        recordMatch(telemetry, result.skill.location, input.session_id);
+      for (const location of injectedLocations) {
+        recordMatch(telemetry, location, input.session_id);
       }
       await saveTelemetry(telemetry);
-    } catch (err) {
+    } catch {
       // Telemetry is best-effort — don't fail the hook
-      process.stderr.write(`skill-router: telemetry error: ${err}\n`);
     }
   }
 

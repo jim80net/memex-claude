@@ -100,6 +100,15 @@ describe("handleSessionStart", () => {
     expect(result.additionalContext).toContain("03:00");
   });
 
+  it("defaults to 03:00 when dailyAt is malformed", async () => {
+    const malformed: SleepScheduleConfig = { enabled: true, dailyAt: "garbage", projects: [] };
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, malformed);
+
+    expect(result.additionalContext).toBeDefined();
+    // Should fall back to "0 3 * * *"
+    expect(result.additionalContext).toContain("0 3 * * *");
+  });
+
   it("skips cron prompt when watermark is fresh", async () => {
     // Write a fresh watermark
     const watermarkPath = join(fakeHome, ".claude", "cache", "skill-router-cron-watermark");
