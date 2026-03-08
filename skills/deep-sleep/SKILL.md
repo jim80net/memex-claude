@@ -15,7 +15,7 @@ Analyze past session transcripts to extract user preferences, recurring patterns
 
 ## When to Use
 
-- Periodically (weekly) to consolidate learnings from recent sessions
+- Daily to consolidate learnings from recent sessions
 - After a productive session where many patterns were established
 - When you notice the same corrections being made repeatedly
 
