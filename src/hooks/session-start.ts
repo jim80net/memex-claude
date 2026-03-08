@@ -11,7 +11,6 @@ const execFileAsync = promisify(execFile);
 
 const CRON_WATERMARK_PATH = join(homedir(), ".claude", "cache", "skill-router-cron-watermark");
 const CRON_MARKER = "skill-router-sleep";
-const CRON_WATERMARK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 /**
  * SessionStart hook:
@@ -45,35 +44,31 @@ export async function handleSessionStart(
     }
   }
 
-  // 3. Lifecycle cron check
-  if (sleepConfig.enabled) {
-    const needsCron = await shouldSetupCron();
-    if (needsCron) {
-      const cronExists = await hasCronEntry();
-      if (!cronExists) {
-        await writeCronWatermark();
-        return {
-          additionalContext: buildCronSetupInstructions(sleepConfig),
-        };
-      }
-      // Cron exists, just refresh watermark
+  // 3. Sleep schedule cron check
+  if (sleepConfig.enabled && !(await hasBeenPrompted())) {
+    const cronExists = await hasCronEntry();
+    if (!cronExists) {
       await writeCronWatermark();
+      return {
+        additionalContext: buildCronSetupInstructions(sleepConfig),
+      };
     }
+    // Cron exists, mark as prompted so we don't check crontab every session
+    await writeCronWatermark();
   }
 
   return {};
 }
 
 /**
- * Check if we should attempt cron setup (watermark stale or missing).
+ * Check if we've already prompted the user about cron setup.
  */
-async function shouldSetupCron(): Promise<boolean> {
+async function hasBeenPrompted(): Promise<boolean> {
   try {
-    const raw = await readFile(CRON_WATERMARK_PATH, "utf-8");
-    const timestamp = new Date(raw.trim()).getTime();
-    return Date.now() - timestamp > CRON_WATERMARK_MAX_AGE_MS;
+    await readFile(CRON_WATERMARK_PATH, "utf-8");
+    return true;
   } catch {
-    return true; // No watermark = never set up
+    return false;
   }
 }
 
