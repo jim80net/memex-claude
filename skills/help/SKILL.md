@@ -20,19 +20,30 @@ The skill-router injects relevant knowledge into your session based on what you'
 
 ## How it works
 
-Each prompt you type is embedded locally (ONNX, no API calls) and compared against your indexed skills, rules, and memories. The top matches are injected as additional context.
+Each prompt you type is embedded locally (ONNX, no API calls) and compared against your indexed skills, rules, and memories. The top matches are injected as additional context. Match counts are tracked via telemetry (`~/.claude/cache/skill-router-telemetry.json`).
 
-**Disclosure model:**
-- **Rules** — full content on first match, one-liner reminder after that
-- **Skills/workflows** — description teaser; read the full SKILL.md if you choose to use it
-- **Memories** — full content always (they're short)
+**Entry types and disclosure model:**
+
+| Type | First match | Subsequent matches | Matched on |
+|------|------------|--------------------|----|
+| `rule` | Full content | `one-liner` reminder only | UserPromptSubmit |
+| `memory` | Full content | Full content | UserPromptSubmit |
+| `skill` | Description teaser | Full content (via Read) | UserPromptSubmit |
+| `workflow` | Description teaser | Full content (via Read) | UserPromptSubmit |
+| `tool-guidance` | Full content | Full content | PreToolUse |
+| `stop-rule` | Behavioral rules | — | Stop |
+| `session-learning` | Full content | Full content | UserPromptSubmit |
 
 ## Bundled skills
 
 | Command | Description |
 |---------|-------------|
-| `/sleep` | Migrate MEMORY.md entries into semantically-searchable skills |
-| `/deep-sleep` | Analyze past sessions to extract recurring patterns into skills |
+| `/sleep` | Knowledge lifecycle: migrate CLAUDE.md/MEMORY.md/rules into skills, promote/demote entries based on match telemetry |
+| `/deep-sleep` | Analyze past session transcripts to extract recurring patterns, classify into appropriate types |
+| `/reflect` | Extract learnings from the *current* conversation and save as memories, rules, or skills |
+| `/doctor` | Diagnose installation and configuration issues |
+| `/handoff` | Write a continuation plan to disk so a fresh session can pick up where this one left off |
+| `/takeover` | Read a handoff document and resume the work |
 | `/help` | This guide |
 
 ## Creating content
@@ -72,7 +83,17 @@ Rules without frontmatter work too — filename becomes name, first line becomes
 
 ### Memories
 
-Memories live in `~/.claude/projects/<encoded-cwd>/memory/*.md`. Use `/sleep` to convert accumulated MEMORY.md entries into searchable skills.
+Memories live in `~/.claude/projects/<encoded-cwd>/memory/*.md` (where `<encoded-cwd>` is the cwd with `/` → `-` and `.` → `-`).
+
+Use `##` headings for each entry and optionally add `Triggers:` lines for better semantic matching:
+
+```markdown
+## Prefer pnpm
+Triggers: install dependencies, npm install, which package manager
+Use `pnpm` instead of `npm` for all operations.
+```
+
+Use `/sleep` to convert accumulated MEMORY.md entries into searchable skills, and `/reflect` to extract learnings from the current conversation.
 
 ## Check status
 
@@ -96,6 +117,9 @@ ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 # Cache status
 ls -la ~/.claude/cache/skill-router.json 2>/dev/null
 
+# Match telemetry
+cat ~/.claude/cache/skill-router-telemetry.json 2>/dev/null
+
 # Model cache
 ls ~/.claude/cache/models/ 2>/dev/null
 ```
@@ -110,12 +134,37 @@ Create `~/.claude/skill-router.json` to customize. All fields optional — defau
   "embeddingModel": "Xenova/all-MiniLM-L6-v2",
   "cacheTimeMs": 300000,
   "skillDirs": [],
+  "sync": {
+    "enabled": false,
+    "repo": "",
+    "autoPull": true,
+    "autoCommitPush": true,
+    "projectMappings": {}
+  },
+  "sleepSchedule": {
+    "enabled": false,
+    "dailyAt": "03:00",
+    "projects": []
+  },
   "hooks": {
     "UserPromptSubmit": {
       "enabled": true,
       "topK": 3,
       "threshold": 0.5,
-      "maxInjectedChars": 8000
+      "maxInjectedChars": 8000,
+      "types": ["skill", "memory", "workflow", "session-learning", "rule"]
+    },
+    "PreToolUse": {
+      "enabled": false,
+      "topK": 2,
+      "threshold": 0.6,
+      "maxInjectedChars": 4000,
+      "types": ["tool-guidance", "skill"]
+    },
+    "Stop": {
+      "enabled": false,
+      "extractLearnings": true,
+      "behavioralRules": true
     }
   }
 }
@@ -125,6 +174,7 @@ Key tuning knobs:
 - **`threshold`** — lower to match more broadly (default 0.5), raise for precision
 - **`topK`** — how many matches to inject per prompt (default 3)
 - **`maxInjectedChars`** — character budget for injected content (default 8000)
+- **`sync`** — enable cross-machine sync via a private git repo (see README)
 
 ## Troubleshooting
 
