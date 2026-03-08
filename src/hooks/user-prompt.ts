@@ -84,8 +84,9 @@ export async function handleUserPrompt(
         recordMatch(telemetry, result.skill.location, input.session_id);
       }
       await saveTelemetry(telemetry);
-    } catch {
+    } catch (err) {
       // Telemetry is best-effort — don't fail the hook
+      process.stderr.write(`skill-router: telemetry error: ${err}\n`);
     }
   }
 
