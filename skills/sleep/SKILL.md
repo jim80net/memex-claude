@@ -1,6 +1,6 @@
 ---
 name: sleep
-description: "Manage the knowledge lifecycle: migrate MEMORY.md, CLAUDE.md, and rules into semantically-searchable skills, and promote/demote entries based on match telemetry."
+description: "Manage the sleep cycle: migrate MEMORY.md, CLAUDE.md, and rules into semantically-searchable skills, and promote/demote entries based on match telemetry."
 queries:
   - "convert memories to skills"
   - "optimize memory for semantic search"
@@ -11,7 +11,7 @@ queries:
   - "move rules to skills"
   - "promote memory to rule"
   - "demote rule to skill"
-  - "knowledge lifecycle management"
+  - "sleep management"
 ---
 
 # /sleep — Knowledge Lifecycle Management

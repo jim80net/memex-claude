@@ -5,12 +5,12 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { syncPull } from "../core/sync.ts";
 import { loadRegistry, saveRegistry, registerProject } from "../core/project-registry.ts";
-import type { HookInput, HookOutput, SyncConfig, LifecycleConfig } from "../core/types.ts";
+import type { HookInput, HookOutput, SyncConfig, SleepScheduleConfig } from "../core/types.ts";
 
 const execFileAsync = promisify(execFile);
 
 const CRON_WATERMARK_PATH = join(homedir(), ".claude", "cache", "skill-router-cron-watermark");
-const CRON_MARKER = "skill-router-lifecycle";
+const CRON_MARKER = "skill-router-sleep";
 const CRON_WATERMARK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 /**
@@ -22,7 +22,7 @@ const CRON_WATERMARK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 export async function handleSessionStart(
   input: HookInput,
   syncConfig: SyncConfig,
-  lifecycleConfig: LifecycleConfig
+  sleepConfig: SleepScheduleConfig
 ): Promise<HookOutput> {
   const cwd = input.cwd || process.cwd();
 
@@ -46,14 +46,14 @@ export async function handleSessionStart(
   }
 
   // 3. Lifecycle cron check
-  if (lifecycleConfig.enabled) {
+  if (sleepConfig.enabled) {
     const needsCron = await shouldSetupCron();
     if (needsCron) {
       const cronExists = await hasCronEntry();
       if (!cronExists) {
         await writeCronWatermark();
         return {
-          additionalContext: buildCronSetupInstructions(lifecycleConfig),
+          additionalContext: buildCronSetupInstructions(sleepConfig),
         };
       }
       // Cron exists, just refresh watermark
@@ -104,29 +104,29 @@ async function writeCronWatermark(): Promise<void> {
 /**
  * Build instructions for Claude to set up the system crontab entry.
  */
-function buildCronSetupInstructions(config: LifecycleConfig): string {
+function buildCronSetupInstructions(config: SleepScheduleConfig): string {
   const [hour, minute] = config.dailyAt.split(":").map(Number);
   const h = isNaN(hour) ? 3 : hour;
   const m = isNaN(minute) ? 0 : minute;
 
   return [
-    "## Skill-Router: Daily lifecycle cron setup needed",
+    "## Skill-Router: Daily sleep schedule setup needed",
     "",
-    "The skill-router's knowledge lifecycle (/sleep and /deep-sleep) should run daily but no system cron entry was found.",
+    "The skill-router's daily sleep schedule (/sleep and /deep-sleep) should run but no system cron entry was found.",
     "",
-    "**Ask the user** if they'd like to set up a daily cron job to run knowledge lifecycle management.",
-    `The configured time is ${config.dailyAt} (local time). Offer to change it or disable lifecycle in ~/.claude/skill-router.json.`,
+    "**Ask the user** if they'd like to set up a daily cron job to run sleep management.",
+    `The configured time is ${config.dailyAt} (local time). Offer to change it or disable sleepSchedule in ~/.claude/skill-router.json.`,
     "",
     "If the user agrees, add this crontab entry:",
     "",
     "```bash",
     `# ${CRON_MARKER}`,
-    `${m} ${h} * * * ${join(homedir(), ".claude", "plugins", "cache", "jim80net-plugins", "claude-skill-router")}/_active/bin/lifecycle.sh`,
+    `${m} ${h} * * * ${join(homedir(), ".claude", "plugins", "cache", "jim80net-plugins", "claude-skill-router")}/_active/bin/sleep-schedule.sh`,
     "```",
     "",
     "Use `crontab -l` to list current entries, then `crontab -` to write the updated list.",
     "Do NOT replace existing cron entries — append this one.",
     "",
-    "If the user declines, suggest setting `lifecycle.enabled: false` in `~/.claude/skill-router.json` to stop this prompt.",
+    "If the user declines, suggest setting `sleepSchedule.enabled: false` in `~/.claude/skill-router.json` to stop this prompt.",
   ].join("\n");
 }

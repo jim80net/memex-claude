@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
     autoCommitPush: true,
     projectMappings: {},
   },
-  lifecycle: {
+  sleepSchedule: {
     enabled: false,
     dailyAt: "03:00",
     projects: [],
@@ -70,8 +70,8 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
     base.sync = { ...base.sync, ...user.sync };
   }
 
-  if (user.lifecycle) {
-    base.lifecycle = { ...base.lifecycle, ...user.lifecycle };
+  if (user.sleepSchedule) {
+    base.sleepSchedule = { ...base.sleepSchedule, ...user.sleepSchedule };
   }
 
   if (user.hooks) {

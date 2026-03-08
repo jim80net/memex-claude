@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { handleSessionStart } from "../src/hooks/session-start.ts";
-import type { HookInput, SyncConfig, LifecycleConfig } from "../src/core/types.ts";
+import type { HookInput, SyncConfig, SleepScheduleConfig } from "../src/core/types.ts";
 
 // Mock homedir
 vi.mock("node:os", async (importOriginal) => {
@@ -49,13 +49,13 @@ const SYNC_DISABLED: SyncConfig = {
   projectMappings: {},
 };
 
-const LIFECYCLE_DISABLED: LifecycleConfig = {
+const SLEEP_DISABLED: SleepScheduleConfig = {
   enabled: false,
   dailyAt: "03:00",
   projects: [],
 };
 
-const LIFECYCLE_ENABLED: LifecycleConfig = {
+const SLEEP_ENABLED: SleepScheduleConfig = {
   enabled: true,
   dailyAt: "03:00",
   projects: [],
@@ -75,8 +75,8 @@ describe("handleSessionStart", () => {
     await rm(fakeHome, { recursive: true, force: true });
   });
 
-  it("returns empty output when lifecycle is disabled", async () => {
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, LIFECYCLE_DISABLED);
+  it("returns empty output when sleep schedule is disabled", async () => {
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED);
     expect(result).toEqual({});
   });
 
@@ -84,7 +84,7 @@ describe("handleSessionStart", () => {
     const { registerProject } = await import("../src/core/project-registry.ts");
     (registerProject as ReturnType<typeof vi.fn>).mockClear();
 
-    await handleSessionStart(BASE_INPUT, SYNC_DISABLED, LIFECYCLE_DISABLED);
+    await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED);
 
     expect(registerProject).toHaveBeenCalledWith(
       expect.any(Object),
@@ -92,11 +92,11 @@ describe("handleSessionStart", () => {
     );
   });
 
-  it("returns cron setup instructions when lifecycle enabled and no cron exists", async () => {
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, LIFECYCLE_ENABLED);
+  it("returns cron setup instructions when sleep schedule enabled and no cron exists", async () => {
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED);
 
     expect(result.additionalContext).toBeDefined();
-    expect(result.additionalContext).toContain("lifecycle cron setup needed");
+    expect(result.additionalContext).toContain("sleep schedule setup needed");
     expect(result.additionalContext).toContain("03:00");
   });
 
@@ -105,7 +105,7 @@ describe("handleSessionStart", () => {
     const watermarkPath = join(fakeHome, ".claude", "cache", "skill-router-cron-watermark");
     await writeFile(watermarkPath, new Date().toISOString(), "utf-8");
 
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, LIFECYCLE_ENABLED);
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED);
 
     expect(result.additionalContext).toBeUndefined();
   });

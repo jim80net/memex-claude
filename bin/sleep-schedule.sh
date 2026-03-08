@@ -1,5 +1,5 @@
 #!/bin/sh
-# skill-router-lifecycle — daily knowledge lifecycle runner.
+# skill-router-sleep-schedule — daily knowledge sleep-schedule runner.
 # Iterates over known projects and runs /sleep + /deep-sleep via claude CLI.
 # Intended to be called from system cron.
 set -e
@@ -9,7 +9,7 @@ ROOT="$(cd "$DIR/.." && pwd)"
 
 CONFIG="$HOME/.claude/skill-router.json"
 REGISTRY="$HOME/.claude/cache/skill-router-projects.json"
-LOG="$HOME/.claude/cache/skill-router-lifecycle.log"
+LOG="$HOME/.claude/cache/skill-router-sleep-schedule.log"
 
 log() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$LOG"
@@ -21,13 +21,13 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-# Read project list from config (lifecycle.projects), fall back to registry
+# Read project list from config (sleep-schedule.projects), fall back to registry
 PROJECTS=""
 if [ -f "$CONFIG" ]; then
-  # Extract lifecycle.projects array from config
+  # Extract sleep-schedule.projects array from config
   PROJECTS=$(node -e "
     const c = JSON.parse(require('fs').readFileSync('$CONFIG', 'utf-8'));
-    const p = c.lifecycle?.projects || [];
+    const p = c.sleepSchedule?.projects || [];
     if (p.length) p.forEach(x => console.log(x));
   " 2>/dev/null || true)
 fi
@@ -45,7 +45,7 @@ if [ -z "$PROJECTS" ]; then
   exit 0
 fi
 
-log "Starting lifecycle run"
+log "Starting sleep-schedule run"
 
 echo "$PROJECTS" | while IFS= read -r project; do
   if [ ! -d "$project" ]; then
