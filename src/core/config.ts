@@ -15,6 +15,11 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
     autoCommitPush: true,
     projectMappings: {},
   },
+  lifecycle: {
+    enabled: false,
+    dailyAt: "03:00",
+    projects: [],
+  },
   hooks: {
     UserPromptSubmit: {
       enabled: true,
@@ -63,6 +68,10 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
 
   if (user.sync) {
     base.sync = { ...base.sync, ...user.sync };
+  }
+
+  if (user.lifecycle) {
+    base.lifecycle = { ...base.lifecycle, ...user.lifecycle };
   }
 
   if (user.hooks) {

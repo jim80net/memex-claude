@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   try {
     switch (event) {
       case "SessionStart":
-        await handleSessionStart(input, config.sync);
+        result = await handleSessionStart(input, config.sync, config.lifecycle);
         break;
 
       case "UserPromptSubmit":

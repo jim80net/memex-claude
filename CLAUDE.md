@@ -15,10 +15,10 @@ bun run build.ts     # compile standalone binary
 
 ## Architecture
 
-- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, types
+- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, project-registry, telemetry, types
 - `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
 - `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
-- `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh)
+- `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh, lifecycle.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover)
 - `test/` — Vitest tests mirroring src/ structure
@@ -44,6 +44,12 @@ Session state for rule tracking persists at `~/.claude/cache/sessions/<session_i
 ### Match telemetry
 
 The UserPromptSubmit hook records match events to `~/.claude/cache/skill-router-telemetry.json`. Per-entry data includes match count, first/last matched timestamps, and unique session IDs. This telemetry drives the `/sleep` skill's promotion/demotion recommendations (e.g., high-frequency memories → promote to rules, low-frequency rules → demote to skills).
+
+### Knowledge lifecycle
+
+When `lifecycle.enabled` is true in config, the SessionStart hook checks for a system cron entry to run `/sleep` and `/deep-sleep` daily. If missing, it injects context prompting Claude to set up the crontab (at `lifecycle.dailyAt`, default `03:00`). The `bin/lifecycle.sh` script iterates over `lifecycle.projects` (or auto-discovered projects from `~/.claude/cache/skill-router-projects.json`) and invokes `claude --print` for each.
+
+The project registry is updated automatically on every SessionStart — each project `cwd` is recorded with a `lastSeen` timestamp.
 
 ### Sync
 

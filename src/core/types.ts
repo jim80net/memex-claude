@@ -118,12 +118,19 @@ export type SyncConfig = {
   projectMappings: Record<string, string>; // local path → canonical project id
 };
 
+export type LifecycleConfig = {
+  enabled: boolean;
+  dailyAt: string; // HH:MM in local time, e.g. "03:00"
+  projects: string[]; // explicit project paths; empty = use auto-discovered registry
+};
+
 export type SkillRouterConfig = {
   enabled: boolean;
   embeddingModel: string;
   cacheTimeMs: number;
   skillDirs: string[];
   sync: SyncConfig;
+  lifecycle: LifecycleConfig;
   hooks: {
     UserPromptSubmit: HookConfig;
     PreToolUse: HookConfig;
