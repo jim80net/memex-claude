@@ -83,7 +83,7 @@ For development, you need Node.js 20+ and pnpm.
 /plugin install claude-skill-router
 ```
 
-The plugin ships with prebuilt binaries. If no binary is available for your platform, it falls back to `node --import tsx` automatically.
+The plugin automatically downloads the prebuilt binary for your platform on first run. If the download hasn't completed yet, it falls back to `node --import tsx` until the binary is available.
 
 The plugin registers hooks and ships with `/claude-skill-router:sleep` and `/claude-skill-router:deep-sleep` skills.
 
@@ -124,7 +124,7 @@ cd ~/projects/claude-skill-router
 pnpm install
 ```
 
-The `bin/skill-router` wrapper will automatically fall back to `node --import tsx` when no prebuilt binary is present.
+The `bin/skill-router` wrapper will automatically download the prebuilt binary in the background on first run and fall back to `node --import tsx` until it's available.
 
 ## Configuration
 

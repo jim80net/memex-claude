@@ -62,19 +62,30 @@ else
   exit 1
 fi
 
+# Extract to a temp directory first to avoid overwriting the wrapper script.
+# The tarball contains a file named "skill-router" (the binary) which would
+# clobber bin/skill-router (the shell wrapper) if extracted directly into $DIR.
+EXTRACT_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMPFILE" "$EXTRACT_DIR"' EXIT
+
 echo "Extracting to $DIR..."
 case "$ASSET" in
-  *.tar.gz) tar -xzf "$TMPFILE" -C "$DIR" ;;
-  *.zip)    unzip -o "$TMPFILE" -d "$DIR" ;;
+  *.tar.gz) tar -xzf "$TMPFILE" -C "$EXTRACT_DIR" ;;
+  *.zip)    unzip -o "$TMPFILE" -d "$EXTRACT_DIR" ;;
 esac
 
-# Rename the binary so the wrapper script finds it
-if [ -f "$DIR/skill-router" ] && [ ! -f "$DIR/skill-router.bin" ]; then
-  # The tarball contains "skill-router" but the wrapper expects "skill-router.bin"
-  mv "$DIR/skill-router" "$DIR/skill-router.bin"
+# Move the binary as skill-router.bin so the wrapper script finds it
+if [ -f "$EXTRACT_DIR/skill-router" ]; then
+  mv "$EXTRACT_DIR/skill-router" "$DIR/skill-router.bin"
   chmod +x "$DIR/skill-router.bin"
-elif [ -f "$DIR/skill-router.exe" ]; then
+elif [ -f "$EXTRACT_DIR/skill-router.exe" ]; then
+  mv "$EXTRACT_DIR/skill-router.exe" "$DIR/skill-router.exe"
   chmod +x "$DIR/skill-router.exe" 2>/dev/null || true
 fi
+
+# Copy ONNX shared libraries alongside the binary
+for lib in "$EXTRACT_DIR"/*.so* "$EXTRACT_DIR"/*.dylib "$EXTRACT_DIR"/*.dll; do
+  [ -f "$lib" ] && cp "$lib" "$DIR/"
+done
 
 echo "Installed skill-router ($PLATFORM) to $DIR"

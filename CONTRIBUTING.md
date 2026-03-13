@@ -45,8 +45,9 @@ Output goes to `dist/<platform>/` with the binary and ONNX runtime shared librar
 `bin/skill-router` is a shell wrapper that:
 1. Sets `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` so the ONNX shared lib is found
 2. Execs the compiled binary (`bin/skill-router.bin`)
-3. Falls back to `node --import tsx src/main.ts` if no binary is present
-4. Outputs `{}` with a stderr warning if neither is available
+3. If no binary is found, triggers `install.sh` in the background to download it for the next invocation
+4. Falls back to `node --import tsx src/main.ts` (resolving tsx from the plugin's own `node_modules`)
+5. Outputs `{}` with a stderr warning if neither is available
 
 `bin/skill-router.cmd` is the Windows equivalent (DLLs are found automatically from the same directory).
 

@@ -1,6 +1,8 @@
 #!/bin/sh
 # skill-router hook entry point.
 # Tries the prebuilt binary first, falls back to node, or gracefully fails.
+# When the binary is missing, triggers a background download so the next
+# invocation uses the compiled binary instead of the tsx fallback.
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -13,6 +15,16 @@ if [ -f "$DIR/skill-router.bin" ]; then
     *)       export LD_LIBRARY_PATH="$DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
   esac
   exec "$DIR/skill-router.bin" "$@"
+fi
+
+# 1b. Binary missing — download it in background for next invocation.
+# Uses a lock file to prevent concurrent installs.
+if [ -x "$DIR/install.sh" ] && [ ! -f "$DIR/.installing.lock" ]; then
+  (
+    touch "$DIR/.installing.lock"
+    "$DIR/install.sh" >"$DIR/.install.log" 2>&1
+    rm -f "$DIR/.installing.lock"
+  ) &
 fi
 
 # 2. Fallback: node + tsx (development or if binary not installed)
