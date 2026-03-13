@@ -11,12 +11,27 @@
  *   bun run build.ts --target bun-linux-x64   # cross-compile
  */
 
-import { mkdirSync, cpSync, rmSync, symlinkSync, readlinkSync, existsSync } from "node:fs";
+import { mkdirSync, cpSync, rmSync, symlinkSync, readlinkSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { platform, arch } from "node:os";
 
-const ONNX_BASE = "node_modules/.pnpm/onnxruntime-node@1.21.0/node_modules/onnxruntime-node/bin/napi-v3";
+/** Resolve the ONNX runtime base path dynamically from node_modules. */
+function resolveOnnxBase(): string {
+  // Try the pnpm store first (versioned directory)
+  const pnpmBase = "node_modules/.pnpm";
+  if (existsSync(pnpmBase)) {
+    const entries = readdirSync(pnpmBase);
+    const onnxDir = entries.find((e) => e.startsWith("onnxruntime-node@"));
+    if (onnxDir) {
+      return join(pnpmBase, onnxDir, "node_modules/onnxruntime-node/bin/napi-v3");
+    }
+  }
+  // Fallback: direct node_modules path (npm/yarn)
+  return "node_modules/onnxruntime-node/bin/napi-v3";
+}
+
+const ONNX_BASE = resolveOnnxBase();
 const SHARP_SYMLINK = "node_modules/.pnpm/@huggingface+transformers@3.8.1/node_modules/sharp";
 
 interface PlatformFiles {

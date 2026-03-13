@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { withFileLock } from "./file-lock.ts";
 
 const TELEMETRY_PATH = join(homedir(), ".claude", "cache", "skill-router-telemetry.json");
 
@@ -36,12 +37,14 @@ export async function loadTelemetry(): Promise<TelemetryData> {
 }
 
 export async function saveTelemetry(data: TelemetryData): Promise<void> {
-  const dir = dirname(TELEMETRY_PATH);
-  await mkdir(dir, { recursive: true });
+  await withFileLock(TELEMETRY_PATH, async () => {
+    const dir = dirname(TELEMETRY_PATH);
+    await mkdir(dir, { recursive: true });
 
-  const tmpPath = TELEMETRY_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
-  await writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
-  await rename(tmpPath, TELEMETRY_PATH);
+    const tmpPath = TELEMETRY_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
+    await writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+    await rename(tmpPath, TELEMETRY_PATH);
+  });
 }
 
 /**

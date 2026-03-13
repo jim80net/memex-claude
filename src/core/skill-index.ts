@@ -55,11 +55,15 @@ export function parseFrontmatter(content: string): { meta: ParsedFrontmatter; bo
     if (key === "type") meta.type = value as SkillType;
     if (key === "one-liner") meta.oneLiner = value;
 
-    // List keys — start accumulating if value is empty (block list)
+    // List keys — block-style (empty value + indented items) or inline value
     if (["queries", "paths", "hooks", "keywords"].includes(key)) {
       if (rawValue === "") {
         currentListKey = key;
         listAccumulators[key] = [];
+      } else {
+        // Inline value: treat as a single-element list
+        listAccumulators[key] = listAccumulators[key] || [];
+        listAccumulators[key].push(value);
       }
     }
   }
@@ -379,10 +383,27 @@ export class SkillIndex {
       return currentLocations.has(baseLocation) || currentLocations.has(s.location);
     });
 
-    // Clean cache of deleted files
+    // Clean cache: remove entries for deleted files and entries in scanned directories
+    // that no longer exist. Also removes orphaned entries from directories no longer scanned.
+    const scannedDirs = new Set([
+      ...skillDirs,
+      ...memoryDirs,
+      ...ruleDirs,
+    ]);
+
     for (const loc of Object.keys(this.cache.skills)) {
       const baseLoc = loc.includes("#") ? loc.split("#")[0] : loc;
-      if (!currentLocations.has(baseLoc) && !currentLocations.has(loc)) {
+
+      // Check if the file's parent directory was scanned in this build
+      const parentDir = loc.includes("#")
+        ? baseLoc.substring(0, baseLoc.lastIndexOf("/"))
+        : baseLoc.substring(0, baseLoc.lastIndexOf("/"));
+      // For skills, parent is two levels up (skillDir/name/SKILL.md)
+      const grandparentDir = parentDir.substring(0, parentDir.lastIndexOf("/"));
+
+      const inScannedDir = scannedDirs.has(parentDir) || scannedDirs.has(grandparentDir);
+
+      if (inScannedDir && !currentLocations.has(baseLoc) && !currentLocations.has(loc)) {
         delete this.cache.skills[loc];
       }
     }
