@@ -75,9 +75,6 @@ function summarizeToolInput(
         ? toolInput.file_path
         : "";
     case "Glob":
-      return typeof toolInput.pattern === "string"
-        ? toolInput.pattern
-        : "";
     case "Grep":
       return typeof toolInput.pattern === "string"
         ? toolInput.pattern

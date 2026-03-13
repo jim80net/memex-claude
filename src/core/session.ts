@@ -1,6 +1,8 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
+import { randomBytes } from "node:crypto";
+import { withFileLock } from "./file-lock.ts";
 import type { SessionState } from "./types.ts";
 
 function getSessionPath(sessionId: string): string {
@@ -23,8 +25,12 @@ export async function saveSession(state: SessionState): Promise<void> {
   if (!state.sessionId) return;
 
   const path = getSessionPath(state.sessionId);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(state), "utf-8");
+  await withFileLock(path, async () => {
+    await mkdir(dirname(path), { recursive: true });
+    const tmpPath = path + "." + randomBytes(4).toString("hex") + ".tmp";
+    await writeFile(tmpPath, JSON.stringify(state), "utf-8");
+    await rename(tmpPath, path);
+  });
 }
 
 export function hasRuleBeenShown(state: SessionState, location: string): boolean {

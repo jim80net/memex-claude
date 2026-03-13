@@ -15,7 +15,7 @@ bun run build.ts     # compile standalone binary
 
 ## Architecture
 
-- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, project-registry, telemetry, types
+- `src/core/` — Shared engine: embeddings (local ONNX), skill-index, cache, config, session, sync, project-mapping, project-registry, telemetry, file-lock, types
 - `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
 - `src/main.ts` — Single entry point, dispatches by `hook_event_name` from stdin JSON
 - `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh, sleep-schedule.sh)
@@ -55,14 +55,14 @@ The project registry is updated automatically on every SessionStart — each pro
 
 When `sync.enabled` is true in `~/.claude/skill-router.json`, the router syncs rules, skills, and memories via a git repo:
 
-- **SessionStart**: `git pull --rebase` from remote, auto-resolve markdown conflicts
+- **SessionStart**: `git pull --rebase` from remote (auto-detects default branch), auto-resolve markdown conflicts
 - **Stop**: copy local changes to sync repo, `git commit && push`
 - **Project identity**: git remote URL → `host/owner/repo`; non-git projects → `_local/<encoded-path>`
 - **Config**: `sync.repo` (git URL), `sync.projectMappings` (manual overrides)
 
 ### Rule frontmatter extensions
 
-Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:`, `queries:`, `one-liner:`. Rules without frontmatter are indexed using filename as name.
+Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:`, `queries:`, `one-liner:`. List keys support both block-style (indented `- items`) and inline values (e.g. `queries: "single query"`). Rules without frontmatter are indexed using filename as name.
 
 ## Conventions
 
@@ -70,3 +70,5 @@ Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:
 - Tests mock the `embedTexts` function to avoid loading ONNX models
 - Cache and session modules are mocked in tests to avoid filesystem side effects
 - All paths use `node:path` join + `node:os` homedir — no hardcoded absolute paths
+- File writes to shared state (telemetry, session, registry) use advisory file locks (`src/core/file-lock.ts`) for concurrency safety
+- All 5 hook events are registered in `hooks/hooks.json`; per-hook `enabled` config controls activation

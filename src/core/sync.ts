@@ -50,6 +50,31 @@ async function hasCommits(dir: string): Promise<boolean> {
   }
 }
 
+/**
+ * Detect the default branch name from the remote (e.g. main, master).
+ * Falls back to "main" if detection fails.
+ */
+async function getDefaultBranch(dir: string): Promise<string> {
+  try {
+    const { stdout } = await git(["symbolic-ref", "refs/remotes/origin/HEAD"], dir);
+    // Output is like "refs/remotes/origin/main"
+    const ref = stdout.trim();
+    const branch = ref.replace(/^refs\/remotes\/origin\//, "");
+    if (branch) return branch;
+  } catch {
+    // symbolic-ref not set — try ls-remote
+    try {
+      const { stdout } = await git(["ls-remote", "--symref", "origin", "HEAD"], dir);
+      // Output: "ref: refs/heads/main\tHEAD"
+      const match = stdout.match(/ref:\s+refs\/heads\/(\S+)/);
+      if (match) return match[1];
+    } catch {
+      // Fall through to default
+    }
+  }
+  return "main";
+}
+
 // ---------------------------------------------------------------------------
 // Conflict resolution
 // ---------------------------------------------------------------------------
@@ -171,8 +196,11 @@ export async function syncPull(config: SyncConfig): Promise<string> {
     return "fetch failed (remote unreachable?)";
   }
 
+  const defaultBranch = await getDefaultBranch(SYNC_REPO_DIR);
+  const remoteBranch = `origin/${defaultBranch}`;
+
   try {
-    await git(["rebase", "origin/main"], SYNC_REPO_DIR);
+    await git(["rebase", remoteBranch], SYNC_REPO_DIR);
     return "pulled successfully";
   } catch {
     // Rebase conflict — try to auto-resolve
@@ -195,7 +223,7 @@ export async function syncPull(config: SyncConfig): Promise<string> {
 
     // Fallback: merge instead of rebase
     try {
-      await git(["merge", "origin/main", "--no-edit"], SYNC_REPO_DIR);
+      await git(["merge", remoteBranch, "--no-edit"], SYNC_REPO_DIR);
       return "pulled (merge)";
     } catch {
       const mergeResolved = await resolveConflicts(SYNC_REPO_DIR);
@@ -264,12 +292,13 @@ export async function syncCommitAndPush(config: SyncConfig, cwd: string): Promis
   // Push
   if (!(await hasRemote(SYNC_REPO_DIR))) return "committed (no remote)";
 
+  const pushBranch = await getDefaultBranch(SYNC_REPO_DIR);
   try {
     // Try push; if remote has no branch yet, set upstream
     try {
       await git(["push"], SYNC_REPO_DIR);
     } catch {
-      await git(["push", "-u", "origin", "main"], SYNC_REPO_DIR);
+      await git(["push", "-u", "origin", pushBranch], SYNC_REPO_DIR);
     }
     process.stderr.write(`skill-router[sync]: pushed to remote\n`);
     return `synced ${changeCount} file(s)`;

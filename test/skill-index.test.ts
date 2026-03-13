@@ -140,6 +140,19 @@ Always use pnpm for all package management.`;
     expect(meta.name).toBeUndefined();
     expect(body).toBe(content);
   });
+
+  it("parses inline list values (single item on same line as key)", () => {
+    const content = `---
+name: test-skill
+description: A test skill
+queries: "how do I test?"
+keywords: testing
+---
+body`;
+    const { meta } = parseFrontmatter(content);
+    expect(meta.queries).toEqual(["how do I test?"]);
+    expect(meta.keywords).toEqual(["testing"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

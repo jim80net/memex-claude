@@ -18,6 +18,8 @@ export async function handleStop(
   syncConfig?: SyncConfig
 ): Promise<void> {
   // --- Behavioral rules ---
+  let behavioralRuleFeedback: string | null = null;
+
   if (hookConfig.behavioralRules) {
     const lastResponse = await getLastAssistantResponse(input.transcript_path);
     if (lastResponse) {
@@ -44,11 +46,10 @@ export async function handleStop(
           }
         }
 
-        const feedback = feedbackParts.join("\n\n");
+        behavioralRuleFeedback = feedbackParts.join("\n\n");
         process.stderr.write(
-          `skill-router[Stop]: behavioral rule triggered — ${results.map((r) => r.skill.name).join(", ")}\n${feedback}\n`
+          `skill-router[Stop]: behavioral rule triggered — ${results.map((r) => r.skill.name).join(", ")}\n${behavioralRuleFeedback}\n`
         );
-        process.exit(2); // Exit 2 tells Claude Code to continue with feedback
       }
     }
   }
@@ -59,7 +60,7 @@ export async function handleStop(
     // TODO: Implement in Phase 4 with /deep-sleep infrastructure
   }
 
-  // --- Sync commit + push ---
+  // --- Sync commit + push (always runs, even when a behavioral rule fires) ---
   if (syncConfig?.enabled && syncConfig.autoCommitPush) {
     const cwd = input.cwd || process.cwd();
     try {
@@ -68,6 +69,11 @@ export async function handleStop(
     } catch (err) {
       process.stderr.write(`skill-router[sync]: commit+push failed: ${err}\n`);
     }
+  }
+
+  // --- Exit with corrective feedback after sync completes ---
+  if (behavioralRuleFeedback) {
+    process.exit(2); // Exit 2 tells Claude Code to continue with feedback
   }
 }
 

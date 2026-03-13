@@ -45,20 +45,35 @@ export async function embedTexts(
   return results;
 }
 
+/**
+ * Cosine similarity between two vectors.
+ * Our embeddings are pre-normalized (normalize: true in embedTexts), so this
+ * is effectively a dot product. We keep the full formula for correctness with
+ * any externally-supplied vectors.
+ */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
 
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
   }
 
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  // Fast path: normalized vectors (norm ≈ 1.0) — just return dot product.
+  // For non-normalized inputs, compute the full formula.
+  let normSqA = 0;
+  let normSqB = 0;
+  for (let i = 0; i < a.length; i++) {
+    normSqA += a[i] * a[i];
+    normSqB += b[i] * b[i];
+  }
+
+  // If both vectors are unit-length (within floating-point tolerance), return dot directly
+  if (Math.abs(normSqA - 1.0) < 1e-6 && Math.abs(normSqB - 1.0) < 1e-6) {
+    return dot;
+  }
+
+  const denom = Math.sqrt(normSqA) * Math.sqrt(normSqB);
   if (denom === 0) return 0;
   return dot / denom;
 }
