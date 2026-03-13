@@ -11,9 +11,11 @@ if exist "%DIR%skill-router.exe" (
 )
 
 rem 2. Fallback: node + tsx
+rem cd to ROOT so node resolves tsx from the plugin's own node_modules
 where node >nul 2>&1
 if %ERRORLEVEL%==0 (
   if exist "%ROOT%\node_modules" (
+    cd /d "%ROOT%"
     node --import tsx "%ROOT%\src\main.ts" %*
     exit /b %ERRORLEVEL%
   )

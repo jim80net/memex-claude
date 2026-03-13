@@ -16,13 +16,17 @@ if [ -f "$DIR/skill-router.bin" ]; then
 fi
 
 # 2. Fallback: node + tsx (development or if binary not installed)
+# cd to ROOT so node resolves tsx from the plugin's own node_modules,
+# not from whatever CWD the hook was invoked with.
 if command -v node >/dev/null 2>&1; then
   if [ -d "$ROOT/node_modules" ]; then
+    cd "$ROOT"
     exec node --import tsx "$ROOT/src/main.ts" "$@"
   fi
   # Try installing deps first
   if [ -f "$ROOT/pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
     pnpm --dir "$ROOT" install --frozen-lockfile --silent >&2 2>/dev/null
+    cd "$ROOT"
     exec node --import tsx "$ROOT/src/main.ts" "$@"
   fi
 fi
