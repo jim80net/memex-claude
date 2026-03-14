@@ -22,9 +22,15 @@ describe("encodeProjectPath", () => {
     );
   });
 
-  it("preserves underscores", () => {
+  it("replaces underscores with hyphens", () => {
     expect(encodeProjectPath("/home/dev_user/my_project")).toBe(
-      "-home-dev_user-my_project"
+      "-home-dev-user-my-project"
+    );
+  });
+
+  it("encodes a path with underscores matching Claude Code behavior", () => {
+    expect(encodeProjectPath("/home/jim/workspace/github.com/jim80net/a_book")).toBe(
+      "-home-jim-workspace-github-com-jim80net-a-book"
     );
   });
 });

@@ -9,12 +9,14 @@ import { join } from "node:path";
  * - Leading `/` becomes `-`
  * - Each `/` separator becomes `-`
  * - Dots `.` become `-`
+ * - Underscores `_` become `-`
  * - Consecutive `-` are preserved (they encode dots/separators)
  */
 export function encodeProjectPath(cwd: string): string {
-  // Claude Code uses this encoding: replace / with - and . with -
+  // Claude Code uses this encoding: replace /, ., and _ with -
   // e.g. /home/user/.myproject becomes -home-user--myproject
-  return cwd.replace(/\//g, "-").replace(/\./g, "-");
+  // e.g. /home/user/a_book becomes -home-user-a-book
+  return cwd.replace(/\//g, "-").replace(/\./g, "-").replace(/_/g, "-");
 }
 
 /**
