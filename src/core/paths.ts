@@ -7,8 +7,6 @@ export type ClaudePaths = MemexPaths & {
   configPath: string;
   preCompactDir: string;
   cronWatermarkPath: string;
-  globalSkillsDir: string;
-  globalRulesDir: string;
 };
 
 export function getClaudePaths(): ClaudePaths {
