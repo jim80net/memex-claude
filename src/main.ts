@@ -1,12 +1,24 @@
 #!/usr/bin/env node
+import { join } from "node:path";
+import {
+  SkillIndex,
+  LocalEmbeddingProvider,
+  getSyncScanDirs,
+  findMatchingProjectMemoryDirs,
+} from "@jim80net/memex-core";
+import type { HookInput, HookOutput, ScanDirs } from "@jim80net/memex-core";
 import { loadConfig } from "./core/config.ts";
-import { SkillIndex } from "./core/skill-index.ts";
+import {
+  getClaudePaths,
+  getProjectMemoryDir,
+  getProjectSkillsDir,
+  getProjectRulesDir,
+} from "./core/paths.ts";
 import { handleUserPrompt } from "./hooks/user-prompt.ts";
 import { handleStop } from "./hooks/stop.ts";
 import { handlePreToolUse } from "./hooks/pre-tool-use.ts";
 import { handlePreCompact } from "./hooks/pre-compact.ts";
 import { handleSessionStart } from "./hooks/session-start.ts";
-import type { HookInput, HookOutput } from "./core/types.ts";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -22,7 +34,7 @@ async function main(): Promise<void> {
   try {
     input = JSON.parse(raw) as HookInput;
   } catch (err) {
-    process.stderr.write(`skill-router: invalid JSON input: ${err}\n`);
+    process.stderr.write(`memex: invalid JSON input: ${err}\n`);
     process.exit(1);
   }
 
@@ -34,13 +46,39 @@ async function main(): Promise<void> {
   }
 
   const cwd = input.cwd || process.cwd();
-  const index = new SkillIndex(config);
+  const paths = getClaudePaths();
+
+  // Construct core objects
+  const provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
+  const cachePath = join(paths.cacheDir, "memex-cache.json");
+  const index = new SkillIndex(config, provider, cachePath);
+
+  // Build scan dirs from claude-specific paths
+  const scanDirs: ScanDirs = {
+    skillDirs: [paths.globalSkillsDir, getProjectSkillsDir(cwd), ...config.skillDirs],
+    memoryDirs: [getProjectMemoryDir(cwd, paths.projectsDir)],
+    ruleDirs: [paths.globalRulesDir, getProjectRulesDir(cwd)],
+  };
+
+  // Add sync repo scan paths if sync is enabled
+  if (config.sync.enabled) {
+    const syncDirs = getSyncScanDirs(paths.syncRepoDir);
+    scanDirs.skillDirs.push(syncDirs.skillsDir);
+    scanDirs.ruleDirs.push(syncDirs.rulesDir);
+
+    const syncMemDirs = await findMatchingProjectMemoryDirs(
+      cwd,
+      paths.syncRepoDir,
+      config.sync,
+    );
+    scanDirs.memoryDirs.push(...syncMemDirs);
+  }
 
   // Build index (will use cache for unchanged files)
   try {
-    await index.build(cwd);
+    await index.build(scanDirs);
   } catch (err) {
-    process.stderr.write(`skill-router: index build failed: ${err}\n`);
+    process.stderr.write(`memex: index build failed: ${err}\n`);
     outputResult({});
     return;
   }
@@ -79,10 +117,10 @@ async function main(): Promise<void> {
         break;
 
       default:
-        process.stderr.write(`skill-router: unknown hook event: ${event}\n`);
+        process.stderr.write(`memex: unknown hook event: ${event}\n`);
     }
   } catch (err) {
-    process.stderr.write(`skill-router: handler error for ${event}: ${err}\n`);
+    process.stderr.write(`memex: handler error for ${event}: ${err}\n`);
   }
 
   outputResult(result);
@@ -93,6 +131,6 @@ function outputResult(result: HookOutput): void {
 }
 
 main().catch((err) => {
-  process.stderr.write(`skill-router: fatal error: ${err}\n`);
+  process.stderr.write(`memex: fatal error: ${err}\n`);
   process.exit(1);
 });

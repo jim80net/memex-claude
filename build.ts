@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Build script for claude-skill-router standalone binaries.
+ * Build script for memex-claude standalone binaries.
  *
  * Compiles the TypeScript source into a self-contained executable using
  * `bun build --compile`. Sharp is stubbed out (we only use text embeddings).
@@ -44,32 +44,32 @@ const PLATFORMS: Record<string, PlatformFiles> = {
   "linux-x64": {
     onnxDir: join(ONNX_BASE, "linux/x64"),
     sharedLibs: ["libonnxruntime.so.1", "libonnxruntime_providers_shared.so"],
-    binaryName: "skill-router",
+    binaryName: "memex",
   },
   "linux-arm64": {
     onnxDir: join(ONNX_BASE, "linux/arm64"),
     sharedLibs: ["libonnxruntime.so.1"],
-    binaryName: "skill-router",
+    binaryName: "memex",
   },
   "darwin-x64": {
     onnxDir: join(ONNX_BASE, "darwin/x64"),
     sharedLibs: ["libonnxruntime.1.21.0.dylib"],
-    binaryName: "skill-router",
+    binaryName: "memex",
   },
   "darwin-arm64": {
     onnxDir: join(ONNX_BASE, "darwin/arm64"),
     sharedLibs: ["libonnxruntime.1.21.0.dylib"],
-    binaryName: "skill-router",
+    binaryName: "memex",
   },
   "win32-x64": {
     onnxDir: join(ONNX_BASE, "win32/x64"),
     sharedLibs: ["onnxruntime.dll", "DirectML.dll"],
-    binaryName: "skill-router.exe",
+    binaryName: "memex.exe",
   },
   "win32-arm64": {
     onnxDir: join(ONNX_BASE, "win32/arm64"),
     sharedLibs: ["onnxruntime.dll", "DirectML.dll"],
-    binaryName: "skill-router.exe",
+    binaryName: "memex.exe",
   },
 };
 

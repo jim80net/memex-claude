@@ -51,7 +51,7 @@ Locate all knowledge sources for this project:
 ~/.claude/skills/*/SKILL.md
 
 # Match telemetry
-~/.claude/cache/skill-router-telemetry.json
+~/.claude/cache/memex-telemetry.json
 ```
 
 Where `<encoded-cwd>` is the cwd with `/` replaced by `-` and `.` replaced by `-`.
@@ -78,9 +78,9 @@ For task-specific sections, create a SKILL.md (see step 5). Remove the migrated 
 
 Read each rule file in `.claude/rules/`. For each rule:
 
-- If it **lacks frontmatter** (no `---` block), add frontmatter with `name`, `description`, `queries`, and `one-liner` fields. This enables the skill-router to do graduated disclosure (full → one-liner on subsequent matches) instead of Claude Code's native full-content-every-time loading.
+- If it **lacks frontmatter** (no `---` block), add frontmatter with `name`, `description`, `queries`, and `one-liner` fields. This enables memex to do graduated disclosure (full → one-liner on subsequent matches) instead of Claude Code's native full-content-every-time loading.
 
-- If it is **situational** (only relevant during specific tasks, not a universal guardrail), migrate it from `rules/` to a skill with `type: rule`. The skill-router will inject it semantically instead of Claude Code loading it on every prompt.
+- If it is **situational** (only relevant during specific tasks, not a universal guardrail), migrate it from `rules/` to a skill with `type: rule`. Memex will inject it semantically instead of Claude Code loading it on every prompt.
 
 Example frontmatter for a rule that stays in `rules/`:
 
@@ -107,10 +107,10 @@ Read MEMORY.md and any linked topic files. Split into sections and classify:
 
 ### 5. Deduplicate against existing knowledge
 
-Before creating new entries, check each candidate against the existing index using the skill-router's semantic search:
+Before creating new entries, check each candidate against the existing index using memex's semantic search:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate section text>","session_id":"sleep-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/skill-router
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate section text>","session_id":"sleep-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/memex
 ```
 
 If the output contains `additionalContext` with a match at relevance >= 80%, an existing entry already covers this knowledge. Read the matched entry to confirm — if it says the same thing, skip the candidate. If the existing entry is related but incomplete, update it instead of creating a duplicate.
@@ -144,7 +144,7 @@ Generate 5 diverse, natural queries a developer would type when they need this k
 
 ### 7. Review telemetry for promotion/demotion
 
-Read `~/.claude/cache/skill-router-telemetry.json`. For each indexed entry, review its telemetry:
+Read `~/.claude/cache/memex-telemetry.json`. For each indexed entry, review its telemetry:
 
 | Signal | Recommendation |
 |--------|---------------|
@@ -185,7 +185,7 @@ ls -la <cwd>/.claude/rules/*.md
 cat <cwd>/CLAUDE.md | head -20
 ```
 
-The skill-router cache will auto-rebuild on next hook invocation (mtime-based).
+The memex cache will auto-rebuild on next hook invocation (mtime-based).
 
 ## Options
 

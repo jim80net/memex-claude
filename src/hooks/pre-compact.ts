@@ -1,26 +1,18 @@
 import { writeFile, mkdir } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { homedir } from "node:os";
-import type { HookInput } from "../core/types.ts";
+import { join } from "node:path";
+import type { HookInput } from "@jim80net/memex-core";
+import { getClaudePaths } from "../core/paths.ts";
 
-/**
- * PreCompact hook: Save important context before Claude Code compacts
- * the conversation. Writes a staging file that can be read by the
- * UserPromptSubmit hook to restore context after compaction.
- */
 export async function handlePreCompact(input: HookInput): Promise<void> {
-  // The transcript_path gives us access to the full conversation
-  // before compaction. We save key context to a staging file.
   if (!input.transcript_path) return;
 
-  const stagingDir = join(homedir(), ".claude", "cache", "pre-compact");
+  const paths = getClaudePaths();
+  const stagingDir = paths.preCompactDir;
   const stagingFile = join(stagingDir, `${input.session_id || "unknown"}.md`);
 
   try {
     await mkdir(stagingDir, { recursive: true });
 
-    // TODO: Phase 3 full implementation
-    // For now, just record that compaction happened
     const timestamp = new Date().toISOString();
     await writeFile(
       stagingFile,
@@ -29,11 +21,11 @@ export async function handlePreCompact(input: HookInput): Promise<void> {
     );
 
     process.stderr.write(
-      `skill-router[PreCompact]: staged context for session ${input.session_id}\n`
+      `memex[PreCompact]: staged context for session ${input.session_id}\n`
     );
   } catch (err) {
     process.stderr.write(
-      `skill-router[PreCompact]: failed to stage context: ${err}\n`
+      `memex[PreCompact]: failed to stage context: ${err}\n`
     );
   }
 }

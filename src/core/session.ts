@@ -1,12 +1,13 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
-import { withFileLock } from "./file-lock.ts";
-import type { SessionState } from "./types.ts";
+import { withFileLock } from "@jim80net/memex-core";
+import type { SessionState } from "@jim80net/memex-core";
+import { getClaudePaths } from "./paths.ts";
 
 function getSessionPath(sessionId: string): string {
-  return join(homedir(), ".claude", "cache", "sessions", `${sessionId}.json`);
+  const paths = getClaudePaths();
+  return join(paths.sessionsDir, `${sessionId}.json`);
 }
 
 export async function loadSession(sessionId: string | undefined): Promise<SessionState> {

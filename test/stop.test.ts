@@ -1,12 +1,33 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { SkillIndex } from "../src/core/skill-index.ts";
-import type { StopHookConfig, SkillSearchResult } from "../src/core/types.ts";
+import type { SkillIndex, SkillSearchResult } from "@jim80net/memex-core";
+import type { StopHookConfig } from "../src/core/config.ts";
 
-// We need to test handleStop but it calls process.exit(2).
-// Instead of importing directly, we test the behavioral logic.
+// Mock memex-core sync functions
+vi.mock("@jim80net/memex-core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@jim80net/memex-core")>();
+  return {
+    ...original,
+    syncCommitAndPush: vi.fn().mockResolvedValue("mocked"),
+  };
+});
+
+// Mock paths
+vi.mock("../src/core/paths.ts", () => ({
+  getClaudePaths: () => ({
+    cacheDir: "/fake/cache",
+    modelsDir: "/fake/models",
+    sessionsDir: "/fake/sessions",
+    syncRepoDir: "/fake/sync",
+    projectsDir: "/fake/projects",
+    telemetryPath: "/fake/telemetry.json",
+    registryPath: "/fake/registry.json",
+    tracesDir: "/fake/traces",
+  }),
+  getProjectMemoryDir: () => "/fake/memory",
+}));
 
 function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
   return {
@@ -14,6 +35,7 @@ function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
     build: vi.fn().mockResolvedValue(undefined),
     search: vi.fn().mockResolvedValue([]),
     readSkillContent: vi.fn().mockResolvedValue(""),
+    needsRebuild: vi.fn().mockReturnValue(false),
     ...overrides,
   } as unknown as SkillIndex;
 }
@@ -40,7 +62,6 @@ describe("Stop hook logic", () => {
   });
 
   it("searches for stop-rules using last assistant response", async () => {
-    // Create a mock transcript
     const transcriptPath = join(tmpDir, "transcript.jsonl");
     await writeFile(
       transcriptPath,
@@ -53,7 +74,6 @@ describe("Stop hook logic", () => {
     const searchFn = vi.fn().mockResolvedValue([]);
     const index = makeIndex({ search: searchFn });
 
-    // Import handleStop dynamically to avoid process.exit issues
     const { handleStop } = await import("../src/hooks/stop.ts");
 
     await handleStop(
@@ -65,7 +85,6 @@ describe("Stop hook logic", () => {
       BASE_CONFIG
     );
 
-    // Verify it searched with stop-rule type filter
     expect(searchFn).toHaveBeenCalledWith(
       expect.stringContaining("out of scope"),
       3,

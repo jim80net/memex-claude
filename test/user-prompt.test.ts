@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { handleUserPrompt } from "../src/hooks/user-prompt.ts";
-import type { SkillIndex } from "../src/core/skill-index.ts";
-import type { HookConfig, HookInput, SkillSearchResult } from "../src/core/types.ts";
+import type { SkillIndex, HookInput, SkillSearchResult } from "@jim80net/memex-core";
+import type { HookConfig } from "../src/core/config.ts";
 
 // Mock session module to avoid filesystem side effects
 vi.mock("../src/core/session.ts", () => ({
@@ -11,11 +11,30 @@ vi.mock("../src/core/session.ts", () => ({
   markRuleShown: vi.fn(),
 }));
 
-// Mock telemetry module to avoid filesystem side effects
-vi.mock("../src/core/telemetry.ts", () => ({
-  loadTelemetry: vi.fn().mockResolvedValue({ version: 1, entries: {} }),
-  saveTelemetry: vi.fn().mockResolvedValue(undefined),
-  recordMatch: vi.fn(),
+// Mock memex-core telemetry + file-lock to avoid filesystem side effects
+vi.mock("@jim80net/memex-core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@jim80net/memex-core")>();
+  return {
+    ...original,
+    loadTelemetry: vi.fn().mockResolvedValue({ version: 1, entries: {} }),
+    saveTelemetry: vi.fn().mockResolvedValue(undefined),
+    recordMatch: vi.fn(),
+    withFileLock: vi.fn(async (_path: string, fn: () => Promise<unknown>) => fn()),
+  };
+});
+
+// Mock paths
+vi.mock("../src/core/paths.ts", () => ({
+  getClaudePaths: () => ({
+    cacheDir: "/fake/cache",
+    modelsDir: "/fake/models",
+    sessionsDir: "/fake/sessions",
+    syncRepoDir: "/fake/sync",
+    projectsDir: "/fake/projects",
+    telemetryPath: "/fake/telemetry.json",
+    registryPath: "/fake/registry.json",
+    tracesDir: "/fake/traces",
+  }),
 }));
 
 function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
@@ -24,6 +43,7 @@ function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
     build: vi.fn().mockResolvedValue(undefined),
     search: vi.fn().mockResolvedValue([]),
     readSkillContent: vi.fn().mockResolvedValue(""),
+    needsRebuild: vi.fn().mockReturnValue(false),
     ...overrides,
   } as unknown as SkillIndex;
 }
@@ -44,7 +64,6 @@ const BASE_INPUT: HookInput = {
 };
 
 describe("handleUserPrompt", () => {
-  // Suppress stderr in tests
   const origStderr = process.stderr.write;
   beforeAll(() => { process.stderr.write = vi.fn() as any; });
   afterAll(() => { process.stderr.write = origStderr; });
@@ -74,7 +93,6 @@ describe("handleUserPrompt", () => {
         type: "skill",
         embeddings: [],
         queries: [],
-        mtime: 0,
       },
       score: 0.92,
     };
@@ -89,7 +107,6 @@ describe("handleUserPrompt", () => {
     expect(result.additionalContext).toContain("Available Skill: weather");
     expect(result.additionalContext).toContain("Get weather forecasts");
     expect(result.additionalContext).toContain("92%");
-    // Should NOT contain full content — only teaser
     expect(result.additionalContext).not.toContain("Fetch weather data");
     expect(result.additionalContext).toContain("read the full instructions at");
   });
@@ -103,7 +120,6 @@ describe("handleUserPrompt", () => {
         type: "memory",
         embeddings: [],
         queries: [],
-        mtime: 0,
       },
       score: 0.88,
     };
@@ -130,7 +146,6 @@ describe("handleUserPrompt", () => {
         type: "rule",
         embeddings: [],
         queries: [],
-        mtime: 0,
         oneLiner: "Use pnpm, not npm.",
       },
       score: 0.85,
@@ -158,7 +173,6 @@ describe("handleUserPrompt", () => {
         type: "rule",
         embeddings: [],
         queries: [],
-        mtime: 0,
         oneLiner: "Use pnpm, not npm.",
       },
       score: 0.85,
@@ -171,7 +185,6 @@ describe("handleUserPrompt", () => {
 
     expect(result.additionalContext).toContain("Rule reminder: prefer-pnpm");
     expect(result.additionalContext).toContain("Use pnpm, not npm.");
-    // Should NOT contain full content
     expect(result.additionalContext).not.toContain("Always use pnpm for package management");
   });
 
@@ -179,11 +192,11 @@ describe("handleUserPrompt", () => {
     const bigContent = "x".repeat(5000);
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "skill-a", description: "A", location: "/a", type: "memory", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "skill-a", description: "A", location: "/a", type: "memory", embeddings: [], queries: [] },
         score: 0.9,
       },
       {
-        skill: { name: "skill-b", description: "B", location: "/b", type: "memory", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "skill-b", description: "B", location: "/b", type: "memory", embeddings: [], queries: [] },
         score: 0.8,
       },
     ];
@@ -221,11 +234,11 @@ describe("handleUserPrompt", () => {
   it("skips unreadable skill files and continues", async () => {
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "bad", description: "bad", location: "/bad", type: "memory", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "bad", description: "bad", location: "/bad", type: "memory", embeddings: [], queries: [] },
         score: 0.9,
       },
       {
-        skill: { name: "good", description: "good", location: "/good", type: "memory", embeddings: [], queries: [], mtime: 0 },
+        skill: { name: "good", description: "good", location: "/good", type: "memory", embeddings: [], queries: [] },
         score: 0.85,
       },
     ];
@@ -244,7 +257,7 @@ describe("handleUserPrompt", () => {
   });
 
   it("records telemetry for matched entries", async () => {
-    const { recordMatch } = await import("../src/core/telemetry.ts");
+    const { recordMatch } = await import("@jim80net/memex-core");
     (recordMatch as ReturnType<typeof vi.fn>).mockClear();
 
     const match: SkillSearchResult = {
@@ -255,7 +268,6 @@ describe("handleUserPrompt", () => {
         type: "memory",
         embeddings: [],
         queries: [],
-        mtime: 0,
       },
       score: 0.9,
     };

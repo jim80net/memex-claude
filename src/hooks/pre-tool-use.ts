@@ -1,5 +1,6 @@
-import type { SkillIndex } from "../core/skill-index.ts";
-import type { HookInput, HookOutput, HookConfig } from "../core/types.ts";
+import type { SkillIndex } from "@jim80net/memex-core";
+import type { HookInput, HookOutput } from "@jim80net/memex-core";
+import type { HookConfig } from "../core/config.ts";
 
 export async function handlePreToolUse(
   input: HookInput,
@@ -50,15 +51,12 @@ export async function handlePreToolUse(
   const additionalContext = sections.join("\n\n---\n\n");
 
   process.stderr.write(
-    `skill-router[PreToolUse]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)\n`
+    `memex[PreToolUse]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)\n`
   );
 
   return { additionalContext };
 }
 
-/**
- * Extract a short context string from tool input for better matching.
- */
 function summarizeToolInput(
   toolName: string,
   toolInput: Record<string, unknown>
@@ -80,7 +78,6 @@ function summarizeToolInput(
         ? toolInput.pattern
         : "";
     default:
-      // For unknown tools, try to grab the first string value
       for (const val of Object.values(toolInput)) {
         if (typeof val === "string" && val.length > 0) {
           return val.slice(0, 200);

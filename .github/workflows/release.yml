@@ -51,17 +51,17 @@ jobs:
 
       - name: Package (unix)
         if: runner.os != 'Windows'
-        run: tar -czf skill-router-${{ matrix.platform }}.tar.gz -C dist/${{ matrix.platform }} .
+        run: tar -czf memex-${{ matrix.platform }}.tar.gz -C dist/${{ matrix.platform }} .
 
       - name: Package (windows)
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path dist/${{ matrix.platform }}/* -DestinationPath skill-router-${{ matrix.platform }}.zip
+        run: Compress-Archive -Path dist/${{ matrix.platform }}/* -DestinationPath memex-${{ matrix.platform }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skill-router-${{ matrix.platform }}
-          path: skill-router-${{ matrix.platform }}.*
+          name: memex-${{ matrix.platform }}
+          path: memex-${{ matrix.platform }}.*
 
   publish:
     needs: build

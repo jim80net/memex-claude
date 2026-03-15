@@ -1,10 +1,10 @@
 #!/bin/sh
-# Downloads the prebuilt skill-router binary for the current platform.
+# Downloads the prebuilt memex binary for the current platform.
 # Usage: ./bin/install.sh [version]
 #   version defaults to "latest"
 set -e
 
-REPO="jim80net/claude-skill-router"
+REPO="jim80net/memex-claude"
 VERSION="${1:-latest}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -38,9 +38,9 @@ PLATFORM="$(detect_platform)"
 echo "Detected platform: $PLATFORM" >&2
 
 if [ "$PLATFORM_OS" = "win32" ]; then
-  ASSET="skill-router-${PLATFORM}.zip"
+  ASSET="memex-${PLATFORM}.zip"
 else
-  ASSET="skill-router-${PLATFORM}.tar.gz"
+  ASSET="memex-${PLATFORM}.tar.gz"
 fi
 
 if [ "$VERSION" = "latest" ]; then
@@ -94,8 +94,6 @@ else
 fi
 
 # Extract to a temp directory under $DIR for atomic same-filesystem mv.
-# The tarball contains a file named "skill-router" (the binary) which would
-# clobber bin/skill-router (the shell wrapper) if extracted directly into $DIR.
 EXTRACT_DIR="$(mktemp -d "$DIR/.install-XXXXXX")"
 trap 'rm -rf "$TMPFILE" "$CHECKSUM_FILE" "$EXTRACT_DIR"' EXIT
 
@@ -105,13 +103,13 @@ case "$ASSET" in
   *.zip)    unzip -o "$TMPFILE" -d "$EXTRACT_DIR" ;;
 esac
 
-# Move the binary as skill-router.bin so the wrapper script finds it
-if [ -f "$EXTRACT_DIR/skill-router" ]; then
-  mv "$EXTRACT_DIR/skill-router" "$DIR/skill-router.bin"
-  chmod +x "$DIR/skill-router.bin"
-elif [ -f "$EXTRACT_DIR/skill-router.exe" ]; then
-  mv "$EXTRACT_DIR/skill-router.exe" "$DIR/skill-router.exe"
-  chmod +x "$DIR/skill-router.exe" 2>/dev/null || true
+# Move the binary as memex.bin so the wrapper script finds it
+if [ -f "$EXTRACT_DIR/memex" ]; then
+  mv "$EXTRACT_DIR/memex" "$DIR/memex.bin"
+  chmod +x "$DIR/memex.bin"
+elif [ -f "$EXTRACT_DIR/memex.exe" ]; then
+  mv "$EXTRACT_DIR/memex.exe" "$DIR/memex.exe"
+  chmod +x "$DIR/memex.exe" 2>/dev/null || true
 fi
 
 # Copy ONNX shared libraries alongside the binary
@@ -119,4 +117,4 @@ for lib in "$EXTRACT_DIR"/*.so* "$EXTRACT_DIR"/*.dylib "$EXTRACT_DIR"/*.dll; do
   [ -f "$lib" ] && cp "$lib" "$DIR/"
 done
 
-echo "Installed skill-router ($PLATFORM) version ${VERSION} to $DIR" >&2
+echo "Installed memex ($PLATFORM) version ${VERSION} to $DIR" >&2

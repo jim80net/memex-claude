@@ -2,7 +2,7 @@
 
 ## Configuration
 
-Create `~/.claude/skill-router.json` to customize behavior. All fields are optional — omitted fields use the defaults shown below.
+Create `~/.claude/memex.json` to customize behavior. All fields are optional — omitted fields use the defaults shown below.
 
 ### Full default configuration
 
@@ -203,7 +203,7 @@ The router can sync your growing corpus of rules, skills, and memories across wo
 ### Setup
 
 1. Create a private git repo (e.g., `github.com/you/claude-corpus`)
-2. Enable sync in `~/.claude/skill-router.json`:
+2. Enable sync in `~/.claude/memex.json`:
 
 ```json
 {
@@ -223,7 +223,7 @@ The router can sync your growing corpus of rules, skills, and memories across wo
 ### Sync repo structure
 
 ```
-~/.local/share/claude-skill-router/
+~/.local/share/memex-claude/
 ├── .git/
 ├── rules/                                      # synced global rules
 ├── skills/                                     # synced global skills

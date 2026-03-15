@@ -1,12 +1,12 @@
 #!/bin/sh
-# skill-router-sleep-schedule — daily knowledge sleep-schedule runner.
+# memex-sleep-schedule — daily knowledge sleep-schedule runner.
 # Iterates over known projects and runs /sleep + /deep-sleep via claude CLI.
 # Intended to be called from system cron.
 set -e
 
-CONFIG="$HOME/.claude/skill-router.json"
-REGISTRY="$HOME/.claude/cache/skill-router-projects.json"
-LOG="$HOME/.claude/cache/skill-router-sleep-schedule.log"
+CONFIG="$HOME/.claude/memex.json"
+REGISTRY="$HOME/.claude/cache/memex-projects.json"
+LOG="$HOME/.claude/cache/memex-sleep-schedule.log"
 
 log() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$LOG"
@@ -51,10 +51,10 @@ echo "$PROJECTS" | while IFS= read -r project; do
   fi
 
   log "Running /sleep for $project"
-  echo "/claude-skill-router:sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /sleep failed for $project (exit $?)"
+  echo "/memex-claude:sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /sleep failed for $project (exit $?)"
 
   log "Running /deep-sleep for $project"
-  echo "/claude-skill-router:deep-sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /deep-sleep failed for $project (exit $?)"
+  echo "/memex-claude:deep-sleep" | claude --print --cwd "$project" >> "$LOG" 2>&1 || log "WARN: /deep-sleep failed for $project (exit $?)"
 
   log "Done: $project"
 done

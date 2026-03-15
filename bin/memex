@@ -1,5 +1,5 @@
 #!/bin/sh
-# skill-router hook entry point.
+# memex hook entry point.
 # Tries the prebuilt binary first, downloads it synchronously if missing,
 # or gracefully fails with a one-liner install command.
 set -e
@@ -7,24 +7,24 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 1. Prebuilt binary — fast path
-if [ -f "$DIR/skill-router.bin" ]; then
+if [ -f "$DIR/memex.bin" ]; then
   case "$(uname -s)" in
     Darwin*) export DYLD_LIBRARY_PATH="$DIR${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" ;;
     *)       export LD_LIBRARY_PATH="$DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
   esac
-  exec "$DIR/skill-router.bin" "$@"
+  exec "$DIR/memex.bin" "$@"
 fi
 
 # 2. Binary missing — synchronous download (fits within hook's 15s timeout)
 if [ -x "$DIR/install.sh" ]; then
   "$DIR/install.sh" || true
   # Re-exec if binary was installed successfully
-  if [ -f "$DIR/skill-router.bin" ]; then
+  if [ -f "$DIR/memex.bin" ]; then
     exec "$0" "$@"
   fi
 fi
 
 # 3. Install failed — clear error with one-liner install command
 echo '{}'
-echo "skill-router: binary not found. Install manually:" >&2
+echo "memex: binary not found. Install manually:" >&2
 echo "  cd $(cd "$DIR/.." && pwd) && ./bin/install.sh" >&2

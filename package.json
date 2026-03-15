@@ -1,7 +1,7 @@
 {
-  "name": "claude-skill-router",
+  "name": "memex-claude",
   "version": "1.2.0",
-  "description": "Semantic skill/memory router for Claude Code — injects relevant skills per-turn via hooks",
+  "description": "Memex skill/memory/rule router for Claude Code — semantic context injection via hooks",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1"
+    "@huggingface/transformers": "^3.8.1",
+    "@jim80net/memex-core": "^0.2.2"
   },
   "packageManager": "pnpm@8.3.1",
   "pnpm": {

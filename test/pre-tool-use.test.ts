@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { handlePreToolUse } from "../src/hooks/pre-tool-use.ts";
-import type { SkillIndex } from "../src/core/skill-index.ts";
-import type { HookConfig, HookInput, SkillSearchResult } from "../src/core/types.ts";
+import type { SkillIndex, HookInput, SkillSearchResult } from "@jim80net/memex-core";
+import type { HookConfig } from "../src/core/config.ts";
 
 function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
   return {
@@ -9,6 +9,7 @@ function makeIndex(overrides: Partial<SkillIndex> = {}): SkillIndex {
     build: vi.fn().mockResolvedValue(undefined),
     search: vi.fn().mockResolvedValue([]),
     readSkillContent: vi.fn().mockResolvedValue(""),
+    needsRebuild: vi.fn().mockReturnValue(false),
     ...overrides,
   } as unknown as SkillIndex;
 }
@@ -67,7 +68,6 @@ describe("handlePreToolUse", () => {
         type: "tool-guidance",
         embeddings: [],
         queries: [],
-        mtime: 0,
       },
       score: 0.75,
     };

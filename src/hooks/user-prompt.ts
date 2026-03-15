@@ -1,7 +1,9 @@
-import type { SkillIndex } from "../core/skill-index.ts";
-import type { HookInput, HookOutput, HookConfig } from "../core/types.ts";
+import type { SkillIndex } from "@jim80net/memex-core";
+import type { HookInput, HookOutput } from "@jim80net/memex-core";
+import { loadTelemetry, saveTelemetry, recordMatch, withFileLock } from "@jim80net/memex-core";
+import type { HookConfig } from "../core/config.ts";
 import { loadSession, saveSession, hasRuleBeenShown, markRuleShown } from "../core/session.ts";
-import { loadTelemetry, saveTelemetry, recordMatch } from "../core/telemetry.ts";
+import { getClaudePaths } from "../core/paths.ts";
 
 export async function handleUserPrompt(
   input: HookInput,
@@ -81,11 +83,14 @@ export async function handleUserPrompt(
   // Record match telemetry only for entries that were actually injected
   if (injectedLocations.length > 0 && input.session_id) {
     try {
-      const telemetry = await loadTelemetry();
-      for (const location of injectedLocations) {
-        recordMatch(telemetry, location, input.session_id);
-      }
-      await saveTelemetry(telemetry);
+      const paths = getClaudePaths();
+      await withFileLock(paths.telemetryPath, async () => {
+        const telemetry = await loadTelemetry(paths.telemetryPath);
+        for (const location of injectedLocations) {
+          recordMatch(telemetry, location, input.session_id!);
+        }
+        await saveTelemetry(paths.telemetryPath, telemetry);
+      });
     } catch {
       // Telemetry is best-effort — don't fail the hook
     }
@@ -113,7 +118,7 @@ export async function handleUserPrompt(
   if (counts.skills > 0) parts.push(`${counts.skills} skill${counts.skills > 1 ? "s" : ""}`);
   if (counts.memories > 0) parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
   process.stderr.write(
-    `skill-router: injected ${parts.join(" + ")} (${totalChars} chars)\n`
+    `memex: injected ${parts.join(" + ")} (${totalChars} chars)\n`
   );
 
   return { additionalContext };

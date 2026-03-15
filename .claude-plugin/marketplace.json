@@ -1,14 +1,14 @@
 {
-  "name": "claude-skill-router",
+  "name": "memex-claude",
   "owner": {
     "name": "Jim Park",
     "url": "https://github.com/jim80net"
   },
   "plugins": [
     {
-      "name": "claude-skill-router",
+      "name": "memex-claude",
       "source": "./",
-      "description": "Semantic skill/memory router — injects relevant skills per-turn using embedding similarity",
+      "description": "Memex skill/memory/rule router — semantic context injection via embedding similarity",
       "version": "0.1.0"
     }
   ]

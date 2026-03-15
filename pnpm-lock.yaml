@@ -1,5 +1,9 @@
 lockfileVersion: '6.0'
 
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
 overrides:
   sharp: link:./stubs/sharp
 
@@ -7,6 +11,9 @@ dependencies:
   '@huggingface/transformers':
     specifier: ^3.8.1
     version: 3.8.1
+  '@jim80net/memex-core':
+    specifier: ^0.2.2
+    version: 0.2.2
 
 devDependencies:
   '@types/node':
@@ -493,6 +500,12 @@ packages:
     engines: {node: '>=18.0.0'}
     dependencies:
       minipass: 7.1.3
+    dev: false
+
+  /@jim80net/memex-core@0.2.2:
+    resolution: {integrity: sha512-UudndSTMnOJEJfAIYprtLIdfEGJxEnl6k9rqJeP/ENF0b+y5b+hTUXIywAIPHKx/FElEigTJX/cKh4QgdOpE1g==}
+    optionalDependencies:
+      '@huggingface/transformers': 3.8.1
     dev: false
 
   /@jridgewell/sourcemap-codec@1.5.5:
