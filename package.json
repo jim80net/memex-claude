@@ -3,6 +3,10 @@
   "version": "1.2.0",
   "description": "Semantic skill/memory router for Claude Code — injects relevant skills per-turn via hooks",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jim80net/memex-claude"
+  },
   "type": "module",
   "scripts": {
     "build": "bun run build.ts",
