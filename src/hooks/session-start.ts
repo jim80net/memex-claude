@@ -12,8 +12,8 @@ import { getClaudePaths } from "../core/paths.ts";
 
 const execFileAsync = promisify(execFile);
 
-const CRON_WATERMARK_PATH = join(homedir(), ".claude", "cache", "skill-router-cron-watermark");
-const CRON_MARKER = "skill-router-sleep";
+const CRON_WATERMARK_PATH = join(homedir(), ".claude", "cache", "memex-cron-watermark");
+const CRON_MARKER = "memex-sleep";
 
 function getPluginRoot(): string {
   const thisFile = fileURLToPath(import.meta.url);
@@ -43,9 +43,9 @@ export async function handleSessionStart(
   if (syncConfig.enabled && syncConfig.autoPull) {
     try {
       const result = await syncPull(syncConfig, paths.syncRepoDir);
-      process.stderr.write(`skill-router[sync]: ${result}\n`);
+      process.stderr.write(`memex[sync]: ${result}\n`);
     } catch (err) {
-      process.stderr.write(`skill-router[sync]: pull failed: ${err}\n`);
+      process.stderr.write(`memex[sync]: pull failed: ${err}\n`);
     }
   }
 
@@ -100,12 +100,12 @@ function buildCronSetupInstructions(config: SleepScheduleConfig): string {
   const m = isNaN(minute) ? 0 : minute;
 
   return [
-    "## Skill-Router: Daily sleep schedule setup needed",
+    "## Memex: Daily sleep schedule setup needed",
     "",
-    "The skill-router's daily sleep schedule (/sleep and /deep-sleep) should run but no system cron entry was found.",
+    "The memex daily sleep schedule (/sleep and /deep-sleep) should run but no system cron entry was found.",
     "",
     "**Ask the user** if they'd like to set up a daily cron job to run sleep management.",
-    `The configured time is ${config.dailyAt} (local time). Offer to change it or disable sleepSchedule in ~/.claude/skill-router.json.`,
+    `The configured time is ${config.dailyAt} (local time). Offer to change it or disable sleepSchedule in ~/.claude/memex.json.`,
     "",
     "If the user agrees, add this crontab entry:",
     "",
@@ -117,6 +117,6 @@ function buildCronSetupInstructions(config: SleepScheduleConfig): string {
     "Use `crontab -l` to list current entries, then `crontab -` to write the updated list.",
     "Do NOT replace existing cron entries — append this one.",
     "",
-    "If the user declines, suggest setting `sleepSchedule.enabled: false` in `~/.claude/skill-router.json` to stop this prompt.",
+    "If the user declines, suggest setting `sleepSchedule.enabled: false` in `~/.claude/memex.json` to stop this prompt.",
   ].join("\n");
 }

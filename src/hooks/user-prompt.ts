@@ -118,7 +118,7 @@ export async function handleUserPrompt(
   if (counts.skills > 0) parts.push(`${counts.skills} skill${counts.skills > 1 ? "s" : ""}`);
   if (counts.memories > 0) parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
   process.stderr.write(
-    `skill-router: injected ${parts.join(" + ")} (${totalChars} chars)\n`
+    `memex: injected ${parts.join(" + ")} (${totalChars} chars)\n`
   );
 
   return { additionalContext };

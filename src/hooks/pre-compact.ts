@@ -20,11 +20,11 @@ export async function handlePreCompact(input: HookInput): Promise<void> {
     );
 
     process.stderr.write(
-      `skill-router[PreCompact]: staged context for session ${input.session_id}\n`
+      `memex[PreCompact]: staged context for session ${input.session_id}\n`
     );
   } catch (err) {
     process.stderr.write(
-      `skill-router[PreCompact]: failed to stage context: ${err}\n`
+      `memex[PreCompact]: failed to stage context: ${err}\n`
     );
   }
 }

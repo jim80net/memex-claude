@@ -9,11 +9,11 @@ export function getClaudePaths(): MemexPaths {
     cacheDir: join(home, ".claude", "cache"),
     modelsDir: join(home, ".claude", "cache", "models"),
     sessionsDir: join(home, ".claude", "cache", "sessions"),
-    syncRepoDir: join(home, ".local", "share", "claude-skill-router"),
+    syncRepoDir: join(home, ".local", "share", "memex-claude"),
     projectsDir: join(home, ".claude", "projects"),
-    telemetryPath: join(home, ".claude", "cache", "skill-router-telemetry.json"),
-    registryPath: join(home, ".claude", "cache", "skill-router-projects.json"),
-    tracesDir: join(home, ".claude", "cache", "skill-router-traces"),
+    telemetryPath: join(home, ".claude", "cache", "memex-telemetry.json"),
+    registryPath: join(home, ".claude", "cache", "memex-projects.json"),
+    tracesDir: join(home, ".claude", "cache", "memex-traces"),
   };
 }
 

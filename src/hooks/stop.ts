@@ -42,7 +42,7 @@ export async function handleStop(
 
         behavioralRuleFeedback = feedbackParts.join("\n\n");
         process.stderr.write(
-          `skill-router[Stop]: behavioral rule triggered — ${results.map((r) => r.skill.name).join(", ")}\n${behavioralRuleFeedback}\n`
+          `memex[Stop]: behavioral rule triggered — ${results.map((r) => r.skill.name).join(", ")}\n${behavioralRuleFeedback}\n`
         );
       }
     }
@@ -68,9 +68,9 @@ export async function handleStop(
         },
         cwd,
       );
-      process.stderr.write(`skill-router[sync]: ${result}\n`);
+      process.stderr.write(`memex[sync]: ${result}\n`);
     } catch (err) {
-      process.stderr.write(`skill-router[sync]: commit+push failed: ${err}\n`);
+      process.stderr.write(`memex[sync]: commit+push failed: ${err}\n`);
     }
   }
 

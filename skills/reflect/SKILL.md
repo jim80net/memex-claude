@@ -15,9 +15,9 @@ queries:
 
 Review the current conversation to extract corrections, preferences, patterns, and decisions, then save them as memories, rules, or skills so future sessions start smarter.
 
-## Context: How the Skill-Router Works
+## Context: How Memex Works
 
-The skill-router indexes entries from well-known directories and matches them to user prompts via semantic similarity. When you create an entry, its `queries` are embedded and compared against future prompts. The router surfaces matching entries automatically — so the quality of your `queries` and `description` directly determines when content appears.
+Memex indexes entries from well-known directories and matches them to user prompts via semantic similarity. When you create an entry, its `queries` are embedded and compared against future prompts. Memex surfaces matching entries automatically — so the quality of your `queries` and `description` directly determines when content appears.
 
 **Disclosure model** — determines how matched content is shown to Claude:
 
@@ -74,7 +74,7 @@ For each learning, note *why* it matters — the reasoning, not just the conclus
 
 ### 2. Classify each learning
 
-For each extracted learning, determine the best type based on what was observed and the router's disclosure model:
+For each extracted learning, determine the best type based on what was observed and memex's disclosure model:
 
 | Pattern observed | Type | Destination |
 |-----------------|------|-------------|
@@ -93,15 +93,15 @@ For each extracted learning, determine the best type based on what was observed 
 
 ### 3. Deduplicate against existing knowledge
 
-For each candidate learning, use the skill-router's own semantic search to check for overlapping entries. Pipe the learning text as a `UserPromptSubmit` query:
+For each candidate learning, use memex's own semantic search to check for overlapping entries. Pipe the learning text as a `UserPromptSubmit` query:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate learning text>","session_id":"reflect-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/skill-router
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate learning text>","session_id":"reflect-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/memex
 ```
 
 If the output contains `additionalContext` with a match at relevance >= 80%, the learning is already covered. Read the matched entry to confirm — if the existing entry says the same thing, skip the candidate. If the existing entry is related but incomplete, update it instead of creating a duplicate.
 
-This uses the same embedding-based similarity that the router uses at runtime, so dedup quality matches injection quality.
+This uses the same embedding-based similarity that memex uses at runtime, so dedup quality matches injection quality.
 
 For each learning, one of three outcomes:
 
@@ -131,7 +131,7 @@ The memory directory uses Claude Code's path encoding:
 
 Where `<encoded-cwd>` is `pwd` with `/` → `-` and `.` → `-`.
 
-Group related memories into topic files (e.g., `tooling.md`, `conventions.md`). Use `##` headings for each entry within a topic file. Optionally add a `Triggers:` line so the router can match them more precisely:
+Group related memories into topic files (e.g., `tooling.md`, `conventions.md`). Use `##` headings for each entry within a topic file. Optionally add a `Triggers:` line so memex can match them more precisely:
 
 ```markdown
 ## Prefer pnpm

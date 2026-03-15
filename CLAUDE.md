@@ -22,7 +22,7 @@ bun run build.ts     # compile standalone binary
   - `session.ts` — File-based session persistence (wraps core's `SessionTracker` interface)
 - `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
 - `src/main.ts` — Entry point: constructs `SkillIndex`, `LocalEmbeddingProvider`, `ScanDirs`, dispatches by `hook_event_name`
-- `bin/` — Wrapper scripts (skill-router, skill-router.cmd, install.sh, sleep-schedule.sh)
+- `bin/` — Wrapper scripts (memex, memex.cmd, install.sh, sleep-schedule.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover)
 - `test/` — Vitest tests for hook handlers and claude-specific modules
@@ -35,7 +35,7 @@ bun run build.ts     # compile standalone binary
 | Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` | `<sync-repo>/skills/*/SKILL.md` |
 | Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — | `<sync-repo>/projects/<canonical-id>/memory/*.md` |
 
-When sync is enabled, the sync repo at `~/.local/share/claude-skill-router/` is scanned alongside local paths.
+When sync is enabled, the sync repo at `~/.local/share/memex-claude/` is scanned alongside local paths.
 
 ### Disclosure model
 
@@ -47,21 +47,21 @@ Session state for rule tracking persists at `~/.claude/cache/sessions/<session_i
 
 ### Match telemetry
 
-The UserPromptSubmit hook records match events to `~/.claude/cache/skill-router-telemetry.json`. Per-entry data includes match count, first/last matched timestamps, and unique session IDs. This telemetry drives the `/sleep` skill's promotion/demotion recommendations (e.g., high-frequency memories → promote to rules, low-frequency rules → demote to skills).
+The UserPromptSubmit hook records match events to `~/.claude/cache/memex-telemetry.json`. Per-entry data includes match count, first/last matched timestamps, and unique session IDs. This telemetry drives the `/sleep` skill's promotion/demotion recommendations (e.g., high-frequency memories → promote to rules, low-frequency rules → demote to skills).
 
 ### Sleep schedule
 
-When `sleepSchedule.enabled` is true in config, the SessionStart hook checks for a system cron entry to run `/sleep` and `/deep-sleep` daily. If missing, it injects context prompting Claude to set up the crontab (at `sleepSchedule.dailyAt`, default `03:00`). The `bin/sleep-schedule.sh` script iterates over `sleepSchedule.projects` (or auto-discovered projects from `~/.claude/cache/skill-router-projects.json`) and invokes `claude --print` for each.
+When `sleepSchedule.enabled` is true in config, the SessionStart hook checks for a system cron entry to run `/sleep` and `/deep-sleep` daily. If missing, it injects context prompting Claude to set up the crontab (at `sleepSchedule.dailyAt`, default `03:00`). The `bin/sleep-schedule.sh` script iterates over `sleepSchedule.projects` (or auto-discovered projects from `~/.claude/cache/memex-projects.json`) and invokes `claude --print` for each.
 
 The project registry is updated automatically on every SessionStart — each project `cwd` is recorded with a `lastSeen` timestamp.
 
 ### Binary installation
 
-The wrapper scripts (`bin/skill-router`, `bin/skill-router.cmd`) download the binary synchronously on first run if missing, with SHA256 checksum verification. There is no tsx/node fallback — if the download fails, the hook outputs `{}` with a one-liner install command on stderr. Release artifacts include a `checksums.txt` generated during CI. Version updates are handled by Claude Code's plugin manager.
+The wrapper scripts (`bin/memex`, `bin/memex.cmd`) download the binary synchronously on first run if missing, with SHA256 checksum verification. There is no tsx/node fallback — if the download fails, the hook outputs `{}` with a one-liner install command on stderr. Release artifacts include a `checksums.txt` generated during CI. Version updates are handled by Claude Code's plugin manager.
 
 ### Sync
 
-When `sync.enabled` is true in `~/.claude/skill-router.json`, the router syncs rules, skills, and memories via a git repo:
+When `sync.enabled` is true in `~/.claude/memex.json`, the router syncs rules, skills, and memories via a git repo:
 
 - **SessionStart**: `git pull --rebase` from remote (auto-detects default branch), auto-resolve markdown conflicts
 - **Stop**: copy local changes to sync repo, `git commit && push`

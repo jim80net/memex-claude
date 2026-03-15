@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   try {
     input = JSON.parse(raw) as HookInput;
   } catch (err) {
-    process.stderr.write(`skill-router: invalid JSON input: ${err}\n`);
+    process.stderr.write(`memex: invalid JSON input: ${err}\n`);
     process.exit(1);
   }
 
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
 
   // Construct core objects
   const provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
-  const cachePath = join(paths.cacheDir, "skill-router.json");
+  const cachePath = join(paths.cacheDir, "memex-cache.json");
   const index = new SkillIndex(config, provider, cachePath);
 
   // Build scan dirs from claude-specific paths
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
   try {
     await index.build(scanDirs);
   } catch (err) {
-    process.stderr.write(`skill-router: index build failed: ${err}\n`);
+    process.stderr.write(`memex: index build failed: ${err}\n`);
     outputResult({});
     return;
   }
@@ -119,10 +119,10 @@ async function main(): Promise<void> {
         break;
 
       default:
-        process.stderr.write(`skill-router: unknown hook event: ${event}\n`);
+        process.stderr.write(`memex: unknown hook event: ${event}\n`);
     }
   } catch (err) {
-    process.stderr.write(`skill-router: handler error for ${event}: ${err}\n`);
+    process.stderr.write(`memex: handler error for ${event}: ${err}\n`);
   }
 
   outputResult(result);
@@ -133,6 +133,6 @@ function outputResult(result: HookOutput): void {
 }
 
 main().catch((err) => {
-  process.stderr.write(`skill-router: fatal error: ${err}\n`);
+  process.stderr.write(`memex: fatal error: ${err}\n`);
   process.exit(1);
 });

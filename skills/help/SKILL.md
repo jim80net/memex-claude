@@ -1,26 +1,26 @@
 ---
 name: help
-description: "Show how to use the skill-router: what it does, how to create skills/rules/memories, available commands, current status, and troubleshooting."
+description: "Show how to use memex: what it does, how to create skills/rules/memories, available commands, current status, and troubleshooting."
 queries:
-  - "how does the skill router work"
-  - "how to use skill router"
+  - "how does memex work"
+  - "how to use memex"
   - "what skills are available"
   - "how to create a skill"
   - "how to create a rule"
-  - "skill-router help"
-  - "skill-router is not working"
+  - "memex help"
+  - "memex is not working"
   - "no skills are being injected"
 ---
 
-# /help — Skill-Router Guide & Status
+# /help — Memex Guide & Status
 
-## What is the skill-router?
+## What is memex?
 
-The skill-router injects relevant knowledge into your session based on what you're working on. Instead of loading everything into context at once, it uses semantic similarity to surface only what's needed right now.
+Memex injects relevant knowledge into your session based on what you're working on. Instead of loading everything into context at once, it uses semantic similarity to surface only what's needed right now.
 
 ## How it works
 
-Each prompt you type is embedded locally (ONNX, no API calls) and compared against your indexed skills, rules, and memories. The top matches are injected as additional context. Match counts are tracked via telemetry (`~/.claude/cache/skill-router-telemetry.json`).
+Each prompt you type is embedded locally (ONNX, no API calls) and compared against your indexed skills, rules, and memories. The top matches are injected as additional context. Match counts are tracked via telemetry (`~/.claude/cache/memex-telemetry.json`).
 
 **Entry types and disclosure model:**
 
@@ -97,11 +97,11 @@ Use `/sleep` to convert accumulated MEMORY.md entries into searchable skills, an
 
 ## Check status
 
-Run these to inspect the router's current state:
+Run these to inspect memex's current state:
 
 ```bash
 # Config (or defaults if no file)
-cat ~/.claude/skill-router.json 2>/dev/null || echo "Using defaults"
+cat ~/.claude/memex.json 2>/dev/null || echo "Using defaults"
 
 # What's indexed — global
 ls ~/.claude/skills/*/SKILL.md 2>/dev/null
@@ -115,10 +115,10 @@ ls .claude/rules/*.md 2>/dev/null
 ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 
 # Cache status
-ls -la ~/.claude/cache/skill-router.json 2>/dev/null
+ls -la ~/.claude/cache/memex-cache.json 2>/dev/null
 
 # Match telemetry
-cat ~/.claude/cache/skill-router-telemetry.json 2>/dev/null
+cat ~/.claude/cache/memex-telemetry.json 2>/dev/null
 
 # Model cache
 ls ~/.claude/cache/models/ 2>/dev/null
@@ -126,7 +126,7 @@ ls ~/.claude/cache/models/ 2>/dev/null
 
 ## Configuration
 
-Create `~/.claude/skill-router.json` to customize. All fields optional — defaults shown:
+Create `~/.claude/memex.json` to customize. All fields optional — defaults shown:
 
 ```json
 {
@@ -184,7 +184,7 @@ Key tuning knobs:
 | Wrong things are injected | Adjust `threshold` higher, or improve `queries` in your SKILL.md frontmatter |
 | Everything is injected | `threshold` may be too low, raise it (e.g. 0.6) |
 | Slow first run | Model download (~23MB), needs internet access |
-| Stale results after editing skills | Delete `~/.claude/cache/skill-router.json` to force rebuild |
+| Stale results after editing skills | Delete `~/.claude/cache/memex-cache.json` to force rebuild |
 | Hook not running at all | Check `~/.claude/settings.json` for the hook registration |
 
 $ARGUMENTS

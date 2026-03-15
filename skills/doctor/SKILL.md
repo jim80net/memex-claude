@@ -1,34 +1,34 @@
 ---
 name: doctor
-description: "Diagnose and fix skill-router installation, setup, or runtime problems. Run checks on the binary, config, hooks, cache, model, and scan paths."
+description: "Diagnose and fix memex installation, setup, or runtime problems. Run checks on the binary, config, hooks, cache, model, and scan paths."
 queries:
-  - "skill-router is not working"
+  - "memex is not working"
   - "hooks are not firing"
   - "no skills are being injected"
-  - "troubleshoot skill router"
-  - "diagnose skill-router problems"
-  - "skill-router setup issues"
-  - "fix skill router installation"
-  - "why is skill-router silent"
+  - "troubleshoot memex"
+  - "diagnose memex problems"
+  - "memex setup issues"
+  - "fix memex installation"
+  - "why is memex silent"
 ---
 
-# /doctor — Diagnose Skill-Router Issues
+# /doctor — Diagnose Memex Issues
 
-Run through a diagnostic checklist to identify why the skill-router isn't working. Execute each step in order and stop at the first failure found.
+Run through a diagnostic checklist to identify why memex isn't working. Execute each step in order and stop at the first failure found.
 
 ## Diagnostic Steps
 
 ### 1. Locate the plugin
 
-Find where the skill-router is installed:
+Find where memex is installed:
 
 ```bash
 # Check if installed as a plugin
-cat ~/.claude/settings.json | grep -A5 skill-router
+cat ~/.claude/settings.json | grep -A5 memex
 
 # Or find it by searching for hooks.json
-find ~/.claude -name hooks.json -path '*skill-router*' 2>/dev/null
-find ~/projects -name hooks.json -path '*skill-router*' 2>/dev/null
+find ~/.claude -name hooks.json -path '*memex*' 2>/dev/null
+find ~/projects -name hooks.json -path '*memex*' 2>/dev/null
 ```
 
 Record the plugin root path (referred to as `$PLUGIN_ROOT` below).
@@ -41,7 +41,7 @@ Verify the hook is registered in Claude Code settings:
 cat ~/.claude/settings.json
 ```
 
-Look for a `UserPromptSubmit` hook entry that references `skill-router`. If missing, the router won't run at all.
+Look for a `UserPromptSubmit` hook entry that references `memex`. If missing, memex won't run at all.
 
 ### 3. Check the binary / runtime
 
@@ -49,7 +49,7 @@ Test if the entry point works:
 
 ```bash
 # Try the wrapper script
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/skill-router
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex
 ```
 
 Expected output: `{}` (empty JSON — no skills at `/tmp` is normal).
@@ -58,8 +58,8 @@ If it fails, check each layer:
 
 ```bash
 # Is the prebuilt binary installed?
-ls -la $PLUGIN_ROOT/bin/skill-router.bin    # Unix
-ls -la $PLUGIN_ROOT/bin/skill-router.exe    # Windows
+ls -la $PLUGIN_ROOT/bin/memex.bin    # Unix
+ls -la $PLUGIN_ROOT/bin/memex.exe    # Windows
 
 # Are the ONNX shared libraries present?
 ls -la $PLUGIN_ROOT/bin/libonnxruntime*     # Linux
@@ -82,7 +82,7 @@ ls $PLUGIN_ROOT/node_modules/.package-lock.json 2>/dev/null && echo "deps instal
 ### 4. Check config
 
 ```bash
-cat ~/.claude/skill-router.json 2>/dev/null || echo "No config file (using defaults)"
+cat ~/.claude/memex.json 2>/dev/null || echo "No config file (using defaults)"
 ```
 
 Verify:
@@ -93,14 +93,14 @@ Verify:
 Test config loading:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/skill-router 2>&1
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex 2>&1
 ```
 
-If stderr shows `skill-router: invalid JSON` or config errors, fix the config file.
+If stderr shows `memex: invalid JSON` or config errors, fix the config file.
 
 ### 5. Check scan paths
 
-Verify skills, rules, and memories exist where the router looks:
+Verify skills, rules, and memories exist where memex looks:
 
 ```bash
 # Global skills
@@ -119,24 +119,24 @@ ls .claude/rules/*.md 2>/dev/null
 ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 ```
 
-If no files are found in any location, the router has nothing to inject. Create a test skill:
+If no files are found in any location, memex has nothing to inject. Create a test skill:
 
 ```bash
 mkdir -p ~/.claude/skills/test-skill
 cat > ~/.claude/skills/test-skill/SKILL.md << 'EOF'
 ---
 name: test-skill
-description: "Test skill to verify the router works"
+description: "Test skill to verify memex works"
 type: memory
 queries:
-  - "is the skill router working"
-  - "test skill router"
+  - "is memex working"
+  - "test memex"
 ---
-If you can see this, the skill-router is working correctly.
+If you can see this, memex is working correctly.
 EOF
 ```
 
-Then test: type "is the skill router working" in your next prompt.
+Then test: type "is memex working" in your next prompt.
 
 ### 6. Check the embedding model cache
 
@@ -145,7 +145,7 @@ Then test: type "is the skill router working" in your next prompt.
 ls ~/.claude/cache/models/ 2>/dev/null
 
 # Skill index cache
-ls ~/.claude/cache/skill-router.json 2>/dev/null
+ls ~/.claude/cache/memex-cache.json 2>/dev/null
 ```
 
 If the model cache is empty, the first run will download ~23MB. This requires internet access. If behind a proxy or firewall, the model download may fail silently.
@@ -153,19 +153,19 @@ If the model cache is empty, the first run will download ~23MB. This requires in
 To force a cache rebuild, delete the skill index cache:
 
 ```bash
-rm ~/.claude/cache/skill-router.json 2>/dev/null
+rm ~/.claude/cache/memex-cache.json 2>/dev/null
 ```
 
 ### 7. Test end-to-end with verbose output
 
-Run the router manually and inspect stderr for diagnostics:
+Run memex manually and inspect stderr for diagnostics:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"install dependencies","session_id":"diag-test","cwd":"'$(pwd)'"}' | $PLUGIN_ROOT/bin/skill-router 2>/tmp/skill-router-debug.log
-cat /tmp/skill-router-debug.log
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"install dependencies","session_id":"diag-test","cwd":"'$(pwd)'"}' | $PLUGIN_ROOT/bin/memex 2>/tmp/memex-debug.log
+cat /tmp/memex-debug.log
 ```
 
-Stderr messages prefixed with `skill-router:` indicate specific failures:
+Stderr messages prefixed with `memex:` indicate specific failures:
 - `invalid JSON input` — stdin isn't valid JSON
 - `index build failed` — problem scanning or embedding skills
 - `handler error` — runtime error in the hook handler
@@ -180,6 +180,6 @@ Stderr messages prefixed with `skill-router:` indicate specific failures:
 | Binary crashes | Missing ONNX shared library | Run `bin/install.sh` |
 | `node: not found` | No binary and no Node.js | Run `bin/install.sh` to get the binary |
 | Slow first run | Model downloading | Wait for download (~23MB), ensure internet access |
-| Stale results | Cache not rebuilding | Delete `~/.claude/cache/skill-router.json` |
+| Stale results | Cache not rebuilding | Delete `~/.claude/cache/memex-cache.json` |
 
 $ARGUMENTS

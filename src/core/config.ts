@@ -85,7 +85,7 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
 };
 
 export async function loadConfig(): Promise<SkillRouterConfig> {
-  const configPath = join(homedir(), ".claude", "skill-router.json");
+  const configPath = join(homedir(), ".claude", "memex.json");
   try {
     const raw = await readFile(configPath, "utf-8");
     const user = JSON.parse(raw) as Partial<SkillRouterConfig>;

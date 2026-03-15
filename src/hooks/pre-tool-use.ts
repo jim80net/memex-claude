@@ -51,7 +51,7 @@ export async function handlePreToolUse(
   const additionalContext = sections.join("\n\n---\n\n");
 
   process.stderr.write(
-    `skill-router[PreToolUse]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)\n`
+    `memex[PreToolUse]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)\n`
   );
 
   return { additionalContext };

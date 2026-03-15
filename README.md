@@ -1,6 +1,8 @@
-# claude-skill-router
+# memex-claude
 
 Semantic skill, memory, and rule router for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Injects relevant knowledge into your session based on what you're actually working on, instead of loading everything at once.
+
+Built on [@jim80net/memex-core](https://github.com/jim80net/memex-core) — the shared engine for embedding, indexing, and searching knowledge artifacts.
 
 ## Why this exists
 
@@ -10,7 +12,7 @@ This works well at first. But as you accumulate knowledge — git workflows, tic
 
 The solution is **gradual disclosure**: start with universal principles only, then bring in additional directives at the point of consumption, when the conversation actually turns toward those specific tasks. When you need to trade a ticker, the relevant know-how appears. When you're deploying, the deployment checklist surfaces. When you're just writing code, nothing extra clutters the context.
 
-This is what the skill-router does. As skills, memories, and rules are created, they are embedded for semantic retrieval. Each type has a disclosure pattern suited to its nature:
+This is what memex-claude does. As skills, memories, and rules are created, they are embedded for semantic retrieval. Each type has a disclosure pattern suited to its nature:
 
 - **Skills** — large procedural checklists — are gradually disclosed: a description teaser first, then the full `SKILL.md` when Claude chooses to use it, which may in turn reference other documents and scripts.
 - **Memories** — generally small preferences and facts — are disclosed in full at the moment they become relevant.
@@ -28,8 +30,8 @@ User prompt → embed (local ONNX) → cosine similarity against skill index →
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Shared Core                       │
-│  SkillIndex ←→ Cache (~/.claude/cache/skill-router…) │
+│               @jim80net/memex-core                   │
+│  SkillIndex ←→ Cache (~/.claude/cache/memex-cache…)  │
 │  embeddings (local ONNX via all-MiniLM-L6-v2)       │
 │  cosineSimilarity, mtime-based rebuild               │
 └──────────┬──────────────┬───────────────┬───────────┘
@@ -79,19 +81,19 @@ For development, you need Node.js 20+ and pnpm.
 ### Option A: Claude Code plugin (recommended)
 
 ```
-/plugin marketplace add jim80net/claude-skill-router
-/plugin install claude-skill-router
+/plugin marketplace add jim80net/memex-claude
+/plugin install memex-claude
 ```
 
-The plugin automatically downloads the prebuilt binary for your platform on first run. If the download hasn't completed yet, it falls back to `node --import tsx` until the binary is available.
+The plugin automatically downloads the prebuilt binary for your platform on first run.
 
-The plugin registers hooks and ships with `/claude-skill-router:sleep` and `/claude-skill-router:deep-sleep` skills.
+The plugin registers hooks and ships with `/memex-claude:sleep` and `/memex-claude:deep-sleep` skills.
 
 ### Option B: Prebuilt binary (manual)
 
 ```bash
-git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
-cd ~/projects/claude-skill-router
+git clone https://github.com/jim80net/memex-claude.git ~/projects/memex-claude
+cd ~/projects/memex-claude
 ./bin/install.sh   # downloads the right binary for your platform
 ```
 
@@ -106,7 +108,7 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "~/projects/claude-skill-router/bin/skill-router",
+            "command": "~/projects/memex-claude/bin/memex",
             "timeout": 10
           }
         ]
@@ -119,23 +121,23 @@ Add to `~/.claude/settings.json`:
 ### Option C: From source (development)
 
 ```bash
-git clone https://github.com/jim80net/claude-skill-router.git ~/projects/claude-skill-router
-cd ~/projects/claude-skill-router
+git clone https://github.com/jim80net/memex-claude.git ~/projects/memex-claude
+cd ~/projects/memex-claude
 pnpm install
 ```
 
-The `bin/skill-router` wrapper will automatically download the prebuilt binary in the background on first run and fall back to `node --import tsx` until it's available.
+The `bin/memex` wrapper will automatically download the prebuilt binary on first run.
 
 ## Configuration
 
-Optionally create `~/.claude/skill-router.json` to customize behavior. See [USAGE.md](USAGE.md) for full defaults, all options, and detailed usage including rules, skills, cross-machine sync, and bundled skills.
+Optionally create `~/.claude/memex.json` to customize behavior. See [USAGE.md](USAGE.md) for full defaults, all options, and detailed usage including rules, skills, cross-machine sync, and bundled skills.
 
 ## Performance
 
 - **Steady-state** (cache hit): ~200ms (one local embedding call for the query)
 - **Cold start** (no cache): ~500ms (embed all skills + query)
 - **First run**: Model download (~23MB for all-MiniLM-L6-v2, cached at `~/.claude/cache/models/`)
-- Cache persists at `~/.claude/cache/skill-router.json`
+- Cache persists at `~/.claude/cache/memex-cache.json`
 - Rebuilds only when files change (mtime-gated)
 
 ## Contributing

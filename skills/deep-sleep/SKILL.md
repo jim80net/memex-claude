@@ -60,15 +60,15 @@ Skip one-off requests. Only extract clear, reusable patterns.
 
 ### 4. Deduplicate against existing knowledge
 
-For each candidate learning, use the skill-router's own semantic search to check for overlapping entries. Pipe the learning text as a `UserPromptSubmit` query:
+For each candidate learning, use memex's own semantic search to check for overlapping entries. Pipe the learning text as a `UserPromptSubmit` query:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate learning text>","session_id":"deep-sleep-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/skill-router
+echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"<candidate learning text>","session_id":"deep-sleep-dedup","cwd":"<cwd>"}' | $PLUGIN_ROOT/bin/memex
 ```
 
 If the output contains `additionalContext` with a match at relevance >= 80%, the learning is already covered. Read the matched entry to confirm — if the existing entry says the same thing, skip the candidate. If the existing entry is related but incomplete, update it instead of creating a duplicate.
 
-This uses the same embedding-based similarity that the router uses at runtime, so dedup quality matches injection quality.
+This uses the same embedding-based similarity that memex uses at runtime, so dedup quality matches injection quality.
 
 ### 5. Classify and create entries
 

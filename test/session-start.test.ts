@@ -123,7 +123,7 @@ describe("handleSessionStart", () => {
   });
 
   it("skips cron prompt when watermark is fresh", async () => {
-    const watermarkPath = join(fakeHome, ".claude", "cache", "skill-router-cron-watermark");
+    const watermarkPath = join(fakeHome, ".claude", "cache", "memex-cron-watermark");
     await writeFile(watermarkPath, new Date().toISOString(), "utf-8");
 
     const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED);
