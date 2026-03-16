@@ -12,8 +12,8 @@ dependencies:
     specifier: ^3.8.1
     version: 3.8.1
   '@jim80net/memex-core':
-    specifier: ^0.2.3
-    version: 0.2.3
+    specifier: ^0.3.0
+    version: 0.3.0
 
 devDependencies:
   '@types/node':
@@ -502,8 +502,8 @@ packages:
       minipass: 7.1.3
     dev: false
 
-  /@jim80net/memex-core@0.2.3:
-    resolution: {integrity: sha512-NSkXSfYdAMiXqE13KcWw/KOQlBVgW9UCzBN0gmkc3r71iz3hWW+Z2JF6+F0dyb0ciURbIKgbmst0D2cESeeRaQ==}
+  /@jim80net/memex-core@0.3.0:
+    resolution: {integrity: sha512-cIWbzhKxdM1Xdz4xqKcJk1mcYh5Yeg9Hz+t5Ol9sHHTWNDansIJ2gIKgkw0R8v4GGUf81TVAu+UfDrp4TNKv0A==}
     optionalDependencies:
       '@huggingface/transformers': 3.8.1
     dev: false

@@ -95,6 +95,7 @@ describe("handleUserPrompt", () => {
         queries: [],
       },
       score: 0.92,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),
@@ -122,6 +123,7 @@ describe("handleUserPrompt", () => {
         queries: [],
       },
       score: 0.88,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),
@@ -149,6 +151,7 @@ describe("handleUserPrompt", () => {
         oneLiner: "Use pnpm, not npm.",
       },
       score: 0.85,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),
@@ -176,6 +179,7 @@ describe("handleUserPrompt", () => {
         oneLiner: "Use pnpm, not npm.",
       },
       score: 0.85,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),
@@ -194,10 +198,12 @@ describe("handleUserPrompt", () => {
       {
         skill: { name: "skill-a", description: "A", location: "/a", type: "memory", embeddings: [], queries: [] },
         score: 0.9,
+        bestQueryIndex: 0,
       },
       {
         skill: { name: "skill-b", description: "B", location: "/b", type: "memory", embeddings: [], queries: [] },
         score: 0.8,
+        bestQueryIndex: 0,
       },
     ];
     const index = makeIndex({
@@ -236,10 +242,12 @@ describe("handleUserPrompt", () => {
       {
         skill: { name: "bad", description: "bad", location: "/bad", type: "memory", embeddings: [], queries: [] },
         score: 0.9,
+        bestQueryIndex: 0,
       },
       {
         skill: { name: "good", description: "good", location: "/good", type: "memory", embeddings: [], queries: [] },
         score: 0.85,
+        bestQueryIndex: 0,
       },
     ];
     const index = makeIndex({
@@ -270,6 +278,7 @@ describe("handleUserPrompt", () => {
         queries: [],
       },
       score: 0.9,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),
@@ -281,7 +290,8 @@ describe("handleUserPrompt", () => {
     expect(recordMatch).toHaveBeenCalledWith(
       expect.any(Object),
       "/fake/skills/test/SKILL.md",
-      "test-session"
+      "test-session",
+      0
     );
   });
 });

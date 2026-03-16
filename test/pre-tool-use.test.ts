@@ -70,6 +70,7 @@ describe("handlePreToolUse", () => {
         queries: [],
       },
       score: 0.75,
+      bestQueryIndex: 0,
     };
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([match]),

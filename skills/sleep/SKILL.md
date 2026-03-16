@@ -142,7 +142,39 @@ queries:
 
 Generate 5 diverse, natural queries a developer would type when they need this knowledge.
 
-### 7. Review telemetry for promotion/demotion
+### 7. Evolve queries for existing entries
+
+Read the telemetry file (`~/.claude/cache/memex-telemetry.json`) and examine `observations` and `queryHits` for each indexed entry.
+
+**Classify each query** in an entry's `queries` list:
+- **Strong** (>30% of total hits, good outcomes): Keep as-is
+- **Weak** (<10% of hits): Candidate for replacement
+- **Dead** (0 hits across all sessions): Candidate for replacement
+- **Toxic** (drives false positives — high match count but mostly "ignored"/"corrected" outcomes): Replace
+
+**Mutate weak/dead/toxic queries only** — never touch strong queries. For each replacement, ensure diversity across these styles:
+- Formal: "How do I configure the deployment pipeline?"
+- Casual: "deploy setup"
+- Action-oriented: "set up CI/CD"
+- Keyword-heavy: "deployment pipeline configuration YAML"
+- Disambiguating: "deploy to production (not staging)"
+
+**Optionally adjust boost**: If a skill is consistently matched just below the threshold (appears in observations with low scores but "used" outcomes), consider adding `boost: 0.05` to its frontmatter. If a skill consistently triggers false positives, consider `boost: -0.05`.
+
+Present all proposed changes as a table before applying:
+
+```
+Entry                    Query #  Current Query              Action     New Query
+─────────────────────────────────────────────────────────────────────────────────
+prefer-pnpm              q2       "node package manager"     Replace    "pnpm vs npm which to use"
+deploy-checklist         q0       "deploy"                   Replace    "production deployment checklist steps"
+deploy-checklist         q3       "release process"          Keep       (strong: 42% of hits)
+api-key-location         boost    (none)                     Add        boost: 0.05
+```
+
+After user approval, update the SKILL.md frontmatter for each modified entry. Then clear processed observations from telemetry using the `observations` field deletion.
+
+### 8. Review telemetry for promotion/demotion
 
 Read `~/.claude/cache/memex-telemetry.json`. For each indexed entry, review its telemetry:
 
@@ -168,14 +200,14 @@ debug-tips-1             memory   12       8         5d ago        Consolidate w
 
 Execute promotions/demotions that the user approves.
 
-### 8. Clean up source files
+### 9. Clean up source files
 
 - Remove migrated sections from MEMORY.md. If empty, delete it.
 - Remove migrated sections from CLAUDE.md (leave migration comments).
 - Delete rule files that were demoted to skills.
 - Delete individual memory-skills that were consolidated.
 
-### 9. Verify
+### 10. Verify
 
 List the created/modified files and confirm everything looks correct:
 
