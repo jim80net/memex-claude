@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/jim80net/memex-claude/compare/v1.3.1...v1.3.2) (2026-03-16)
+
+
+### Bug Fixes
+
+* chain binary build into release-please workflow ([#29](https://github.com/jim80net/memex-claude/issues/29)) ([a9ccfb2](https://github.com/jim80net/memex-claude/commit/a9ccfb2a3c02db26754f442d779021e4af37a948))
+
 ## [1.3.1](https://github.com/jim80net/memex-claude/compare/v1.3.0...v1.3.1) (2026-03-16)
 
 
