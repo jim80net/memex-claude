@@ -49,6 +49,12 @@ Session state for rule tracking persists at `~/.claude/cache/sessions/<session_i
 
 The UserPromptSubmit hook records match events to `~/.claude/cache/memex-telemetry.json`. Per-entry data includes match count, first/last matched timestamps, and unique session IDs. This telemetry drives the `/sleep` skill's promotion/demotion recommendations (e.g., high-frequency memories → promote to rules, low-frequency rules → demote to skills).
 
+Additional GEPA telemetry fields:
+- `queryHits` — per-query hit counts (maps query index to match count), enabling data-driven query refinement during `/sleep`
+- `observations` — array of ASI (Autonomous Skill Improvement) insights from `/deep-sleep`, capped at 100 entries
+- `formatTelemetryReport()` — generates a markdown table summarizing telemetry data (match counts, query effectiveness, observations) for human review
+- `boost` — optional frontmatter field on entries that adds a fixed offset to similarity scores, nudging borderline entries above the match threshold
+
 ### Sleep schedule
 
 When `sleepSchedule.enabled` is true in config, the SessionStart hook checks for a system cron entry to run `/sleep` and `/deep-sleep` daily. If missing, it injects context prompting Claude to set up the crontab (at `sleepSchedule.dailyAt`, default `03:00`). The `bin/sleep-schedule.sh` script iterates over `sleepSchedule.projects` (or auto-discovered projects from `~/.claude/cache/memex-projects.json`) and invokes `claude --print` for each.

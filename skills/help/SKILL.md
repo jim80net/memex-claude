@@ -59,6 +59,7 @@ description: "What this skill does"
 queries:
   - "when would someone need this"
   - "another example query"
+boost: 0.05  # optional: nudge score for entries near the threshold
 ---
 The skill content.
 ```
@@ -182,6 +183,8 @@ Key tuning knobs:
 |---------|-------|
 | Nothing is being injected | Are there skills/rules/memories in the scan paths? (see "Check status" above) |
 | Wrong things are injected | Adjust `threshold` higher, or improve `queries` in your SKILL.md frontmatter |
+| Skill barely misses threshold | Add `boost: 0.05` to frontmatter to nudge its score up |
+| Queries feel stale or ineffective | Run `/sleep` — it evolves weak queries based on `queryHits` telemetry |
 | Everything is injected | `threshold` may be too low, raise it (e.g. 0.6) |
 | Slow first run | Model download (~23MB), needs internet access |
 | Stale results after editing skills | Delete `~/.claude/cache/memex-cache.json` to force rebuild |
