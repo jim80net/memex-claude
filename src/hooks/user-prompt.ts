@@ -29,7 +29,7 @@ export async function handleUserPrompt(
   // Read and assemble content with type-specific disclosure
   let totalChars = 0;
   const sections: string[] = [];
-  const injectedLocations: string[] = [];
+  const injectedResults: Array<{ location: string; bestQueryIndex: number }> = [];
   let sessionDirty = false;
 
   for (const result of results) {
@@ -71,7 +71,7 @@ export async function handleUserPrompt(
     if (totalChars + section.length > hookConfig.maxInjectedChars) break;
 
     sections.push(section);
-    injectedLocations.push(skill.location);
+    injectedResults.push({ location: skill.location, bestQueryIndex: result.bestQueryIndex });
     totalChars += section.length;
   }
 
@@ -81,13 +81,13 @@ export async function handleUserPrompt(
   }
 
   // Record match telemetry only for entries that were actually injected
-  if (injectedLocations.length > 0 && input.session_id) {
+  if (injectedResults.length > 0 && input.session_id) {
     try {
       const paths = getClaudePaths();
       await withFileLock(paths.telemetryPath, async () => {
         const telemetry = await loadTelemetry(paths.telemetryPath);
-        for (const location of injectedLocations) {
-          recordMatch(telemetry, location, input.session_id!);
+        for (const { location, bestQueryIndex } of injectedResults) {
+          recordMatch(telemetry, location, input.session_id!, bestQueryIndex);
         }
         await saveTelemetry(paths.telemetryPath, telemetry);
       });

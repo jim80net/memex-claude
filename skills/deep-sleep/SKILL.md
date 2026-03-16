@@ -58,7 +58,44 @@ Review the collected user messages and identify reusable patterns. Look for:
 
 Skip one-off requests. Only extract clear, reusable patterns.
 
-### 4. Deduplicate against existing knowledge
+### 4. Diagnose match quality (ASI extraction)
+
+Scan each processed transcript for memex injection markers — lines containing `"The following was automatically loaded based on semantic relevance"`.
+
+For each injection found:
+1. Identify which skill/memory/rule was injected (from the section headings that follow the marker)
+2. Classify the outcome:
+   - **used**: The assistant clearly used the injected knowledge in its response
+   - **ignored**: The injected knowledge was not referenced or acted upon
+   - **corrected**: The user corrected the assistant's response in a way that contradicts the injected knowledge
+3. Write a one-sentence diagnosis explaining why the match was helpful or unhelpful
+
+Also scan for **missed matches** — cases where the user provided information that an existing skill already contains, but that skill was not injected. For missed matches, use `score: 0` and `queryIndex: -1`.
+
+Record each observation to telemetry:
+
+```bash
+# Read current telemetry
+cat ~/.claude/cache/memex-telemetry.json
+```
+
+For each observation, add it to the entry's `observations` array in the telemetry file. The observation format:
+
+```json
+{
+  "sessionId": "<session-id>",
+  "prompt": "<the user prompt that triggered the injection>",
+  "score": <similarity score or 0 for missed>,
+  "queryIndex": <index of the matching query or -1 for missed>,
+  "outcome": "used|ignored|corrected|missed",
+  "diagnosis": "<one-sentence explanation>",
+  "timestamp": "<ISO timestamp>"
+}
+```
+
+Cap observations at 100 per entry (keep newest).
+
+### 5. Deduplicate against existing knowledge
 
 For each candidate learning, use memex's own semantic search to check for overlapping entries. Pipe the learning text as a `UserPromptSubmit` query:
 
@@ -70,7 +107,7 @@ If the output contains `additionalContext` with a match at relevance >= 80%, the
 
 This uses the same embedding-based similarity that memex uses at runtime, so dedup quality matches injection quality.
 
-### 5. Classify and create entries
+### 6. Classify and create entries
 
 For each novel learning, determine the right type based on how critical and universal it is:
 
@@ -115,7 +152,7 @@ queries:
 <the actual instruction or knowledge, 1-5 lines>
 ```
 
-### 6. Update watermark
+### 7. Update watermark
 
 Write the current ISO timestamp to the watermark file:
 ```bash
@@ -123,7 +160,7 @@ mkdir -p ~/.claude/cache
 date -u +%Y-%m-%dT%H:%M:%SZ > ~/.claude/cache/deep-sleep-watermark
 ```
 
-### 7. Report results
+### 8. Report results
 
 Summarize what was created:
 - Number of transcripts processed
