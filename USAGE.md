@@ -164,6 +164,7 @@ queries:
   - "when would someone need this"
   - "another example query"
   - "third example"
+boost: 0.05  # optional: nudge similarity score for entries near the threshold
 ---
 The actual skill content that gets injected.
 ```
@@ -190,7 +191,7 @@ Use `pnpm` instead of `npm` for all operations:
 
 ### `/sleep` — Organize knowledge
 
-Migrates `MEMORY.md` entries into semantically-searchable skills and rules. Claude Code performs the classification and migration directly — no external API calls needed. Run this after accumulating entries in memory files to keep the corpus organized and searchable.
+Migrates `MEMORY.md` entries into semantically-searchable skills and rules. Claude Code performs the classification and migration directly — no external API calls needed. Run this after accumulating entries in memory files to keep the corpus organized and searchable. `/sleep` also performs query evolution based on `queryHits` and `observations` telemetry — weak queries that rarely match are refined or replaced.
 
 ### `/deep-sleep` — Learn from sessions
 

@@ -59,6 +59,12 @@ User prompt → embed (local ONNX) → cosine similarity against skill index →
 | `session-learning` | Full content | Full content | UserPromptSubmit |
 | `stop-rule` | Behavioral rules for Stop hook | — | Stop |
 
+### GEPA enhancements
+
+- **`boost`** — An optional frontmatter field (`boost: 0.05`) that nudges an entry's similarity score, useful for skills near the match threshold.
+- **Per-query telemetry** — `queryHits` tracks which specific queries triggered matches, enabling data-driven query refinement during `/sleep`.
+- **Query attribution** — Search results include `bestQueryIndex`, identifying which query in the entry's `queries` list was the strongest match.
+
 ### Three sources
 
 The router indexes knowledge from three locations, each at global and project scope:

@@ -178,6 +178,7 @@ queries:
   - "<natural query 3>"
   - "<natural query 4>"
   - "<natural query 5>"
+boost: 0.05  # optional: nudge score for entries near the match threshold
 ---
 <The actual content>
 ```
@@ -185,6 +186,8 @@ queries:
 The `type` field controls disclosure behavior (see Context section). The `description` is the teaser for `skill` and `workflow` types — make it clear enough to decide relevance from the description alone.
 
 #### Query quality
+
+`queryHits` telemetry tracks which individual queries are triggering matches — use this data (visible in `/sleep` reports) to identify and replace underperforming queries.
 
 For all types, `queries` determine when the entry surfaces. Write 3-5 diverse, natural queries a developer would actually type:
 
