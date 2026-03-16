@@ -1,7 +1,7 @@
 {
   "name": "sharp",
   "version": "0.0.0",
-  "description": "No-op stub — skill-router only uses text embeddings, not image processing",
+  "description": "No-op stub — memex-claude only uses text embeddings, not image processing",
   "main": "index.cjs",
   "module": "index.mjs",
   "exports": {
