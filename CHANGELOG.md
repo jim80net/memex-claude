@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/jim80net/memex-claude/compare/v1.3.0...v1.3.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* trigger release workflow on release published event ([#27](https://github.com/jim80net/memex-claude/issues/27)) ([491b901](https://github.com/jim80net/memex-claude/commit/491b901205b5c14ccbd741923c0b3109f790bc83))
+
 ## [1.3.0](https://github.com/jim80net/memex-claude/compare/v1.2.0...v1.3.0) (2026-03-15)
 
 
