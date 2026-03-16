@@ -42,30 +42,25 @@ Output goes to `dist/<platform>/` with the binary and ONNX runtime shared librar
 
 ### Runtime wrapper
 
-`bin/skill-router` is a shell wrapper that:
+`bin/memex` is a shell wrapper that:
 1. Sets `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` so the ONNX shared lib is found
-2. Execs the compiled binary (`bin/skill-router.bin`)
+2. Execs the compiled binary (`bin/memex.bin`)
 3. If no binary is found, runs `install.sh` **synchronously** (with a 12-second download timeout)
 4. If the download succeeds, re-execs itself to run the newly installed binary
 5. If the download fails, outputs `{}` with a one-liner install command on stderr
 
 There is no tsx/node fallback — the binary is the only production runtime. `install.sh` verifies downloads against `checksums.txt` (SHA256) when available.
 
-`bin/skill-router.cmd` is the Windows equivalent with inline PowerShell download logic (DLLs are found automatically from the same directory).
+`bin/memex.cmd` is the Windows equivalent with inline PowerShell download logic (DLLs are found automatically from the same directory).
 
 ## Architecture
 
 ```
 src/
-├── core/           Shared engine
-│   ├── embeddings.ts    Local ONNX embeddings via @huggingface/transformers
-│   ├── skill-index.ts   Scan, index, and search skills/rules/memories
-│   ├── cache.ts         Mtime-gated skill embedding cache
-│   ├── config.ts        Config loading and defaults
-│   ├── session.ts       Per-session state (rule tracking)
-│   ├── sync.ts          Cross-machine git sync
-│   ├── project-mapping.ts  Git remote → canonical project ID
-│   └── types.ts         All type definitions
+├── core/           Claude-specific wrappers
+│   ├── config.ts        Config loading and defaults (extends memex-core)
+│   ├── paths.ts         Claude path configuration (~/.claude/...)
+│   └── session.ts       File-based session persistence
 ├── hooks/          Hook handlers
 │   ├── user-prompt.ts   UserPromptSubmit — semantic matching
 │   ├── pre-tool-use.ts  PreToolUse — tool-specific guidance
@@ -74,8 +69,8 @@ src/
 │   └── session-start.ts SessionStart — sync pull
 ├── main.ts         Entry point — reads stdin JSON, dispatches by hook event
 bin/
-├── skill-router    Unix wrapper script
-├── skill-router.cmd Windows wrapper
+├── memex           Unix wrapper script
+├── memex.cmd       Windows wrapper
 └── install.sh      Downloads prebuilt binary from GitHub releases
 build.ts            Build script for standalone binaries
 ```
