@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/jim80net/memex-claude/compare/v1.4.0...v1.4.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* bump memex-core to 0.2.3 for frontmatter memory parsing ([#32](https://github.com/jim80net/memex-claude/issues/32)) ([999f330](https://github.com/jim80net/memex-claude/commit/999f3304b14828f4f67e1e9a0e45eb03a759e51f))
+
 ## [1.4.0](https://github.com/jim80net/memex-claude/compare/v1.3.2...v1.4.0) (2026-03-16)
 
 
