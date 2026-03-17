@@ -1,6 +1,6 @@
 {
   "name": "memex-claude",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Memex skill/memory/rule router — semantic context injection via embedding similarity",
   "author": {
     "name": "Jim Park",
