@@ -49,7 +49,7 @@ Test if the entry point works:
 
 ```bash
 # Try the wrapper script
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex
+echo '{"hook_event_name":"UserPromptSubmit","prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex
 ```
 
 Expected output: `{}` (empty JSON — no skills at `/tmp` is normal).
@@ -93,7 +93,7 @@ Verify:
 Test config loading:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex 2>&1
+echo '{"hook_event_name":"UserPromptSubmit","prompt":"test","session_id":"diag","cwd":"/tmp"}' | $PLUGIN_ROOT/bin/memex 2>&1
 ```
 
 If stderr shows `memex: invalid JSON` or config errors, fix the config file.
@@ -161,7 +161,7 @@ rm ~/.claude/cache/memex-cache.json 2>/dev/null
 Run memex manually and inspect stderr for diagnostics:
 
 ```bash
-echo '{"hook_event_name":"UserPromptSubmit","user_prompt":"install dependencies","session_id":"diag-test","cwd":"'$(pwd)'"}' | $PLUGIN_ROOT/bin/memex 2>/tmp/memex-debug.log
+echo '{"hook_event_name":"UserPromptSubmit","prompt":"install dependencies","session_id":"diag-test","cwd":"'$(pwd)'"}' | $PLUGIN_ROOT/bin/memex 2>/tmp/memex-debug.log
 cat /tmp/memex-debug.log
 ```
 
