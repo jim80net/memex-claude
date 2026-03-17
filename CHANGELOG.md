@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/jim80net/memex-claude/compare/v1.4.1...v1.5.0) (2026-03-17)
+
+
+### Features
+
+* GEPA sleep/deep-sleep + query attribution ([#34](https://github.com/jim80net/memex-claude/issues/34)) ([7761eb4](https://github.com/jim80net/memex-claude/commit/7761eb410c320a4b6a2de152faf38c7ebd7601aa))
+
+
+### Bug Fixes
+
+* use correct 'prompt' field name in doctor skill test commands ([#37](https://github.com/jim80net/memex-claude/issues/37)) ([f226595](https://github.com/jim80net/memex-claude/commit/f226595f992f25574845699122a8ff3826696cce))
+
 ## [1.4.1](https://github.com/jim80net/memex-claude/compare/v1.4.0...v1.4.1) (2026-03-16)
 
 
