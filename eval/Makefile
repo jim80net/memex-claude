@@ -43,6 +43,10 @@ eval: validate build network
 	cp configs/memex-$(ARM).json /tmp/memex-eval/$(RUN_ID)/claude-home/memex.json
 	cp configs/settings-$(ARM).json /tmp/memex-eval/$(RUN_ID)/claude-home/settings.json
 	mkdir -p /tmp/memex-eval/$(RUN_ID)/claude-home/{skills,rules,cache/sessions,projects}
+	@# Copy OAuth credentials if present (for Claude Max subscriptions)
+	@if [ -f "$(HOME)/.claude/.credentials.json" ]; then \
+		cp "$(HOME)/.claude/.credentials.json" /tmp/memex-eval/$(RUN_ID)/claude-home/.credentials.json; \
+	fi
 	docker run --rm \
 		--network=eval-net \
 		-e ANTHROPIC_API_KEY \
