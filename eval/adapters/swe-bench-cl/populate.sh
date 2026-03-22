@@ -7,7 +7,7 @@
 set -euo pipefail
 
 DATA_DIR="/eval/data/swe-bench-cl"
-CHECKPOINT="/eval/checkpoint.txt"
+CHECKPOINT="/eval/raw/checkpoint.txt"
 TASK_FILE="$DATA_DIR/base_tasks.jsonl"
 BATCH_SIZE="${DAILY_BATCH_SIZE:-4}"
 TURN=0

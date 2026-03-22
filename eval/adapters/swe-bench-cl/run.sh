@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DATA_DIR="/eval/data/swe-bench-cl"
-CHECKPOINT="/eval/checkpoint-phase2.txt"
+CHECKPOINT="/eval/raw/checkpoint-phase2.txt"
 TASK_FILE="$DATA_DIR/eval_tasks.jsonl"
 PILOT="${PILOT:-0}"
 

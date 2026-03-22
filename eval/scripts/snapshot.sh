@@ -26,7 +26,7 @@ for repo_claude in /eval/workdir/*/.claude; do
 done
 
 # Also copy checkpoint files if they exist
-for ckpt in /eval/checkpoint.txt /eval/checkpoint-phase2.txt; do
+for ckpt in /eval/raw/checkpoint.txt /eval/raw/checkpoint-phase2.txt; do
     [ -f "$ckpt" ] && cp "$ckpt" "$SNAP_DIR/"
 done
 
