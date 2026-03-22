@@ -1,0 +1,25 @@
+Excellent! I've successfully identified and fixed the bug in `SlicedLowLevelWCS`. Here's a summary of what I've accomplished:
+
+## Issue Identified
+The `world_to_pixel_values` method in `SlicedLowLevelWCS` was using dummy values (`1.0`) for dropped world dimensions instead of the correct world coordinates at the sliced pixel location. This caused incorrect results when there were coupled transformations between dimensions (non-zero off-diagonal terms in the PC matrix).
+
+## Fix Applied
+I modified the `world_to_pixel_values` method in `/eval/workdir/astropy_astropy/astropy/wcs/wcsapi/wrappers/sliced_wcs.py` to:
+
+1. Compute the actual world coordinates at the sliced pixel location using `_pixel_to_world_values_all`
+2. Use these computed values instead of dummy values for dropped dimensions
+3. Maintain the input world values for kept dimensions
+
+## Test Added
+I added a comprehensive test case `test_sliced_world_to_pixel_coupled_dimensions()` that:
+- Creates a WCS with coupled spatial and spectral dimensions (like in your example)
+- Tests that sliced `world_to_pixel` gives the same spatial pixel coordinates as the full WCS
+- Verifies round-trip consistency (world→pixel→world)
+
+## Files Modified
+- `astropy/wcs/wcsapi/wrappers/sliced_wcs.py` - Applied the core fix
+- `astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py` - Added regression test
+
+The fix addresses the exact issue you reported where `world_to_pixel` on a sliced WCS was returning `1.81818182e+11` instead of the expected `49.5` for the first pixel coordinate. This happened because the dummy value `1.0` was being transformed through the coupled PC matrix, producing the erroneous result.
+
+With this fix, the sliced WCS should now give the same spatial pixel coordinates as the full WCS when transforming the same spatial world coordinates.
