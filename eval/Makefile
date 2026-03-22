@@ -49,6 +49,8 @@ eval: validate build network
 	fi
 	docker run --rm \
 		--network=eval-net \
+		--user $(shell id -u):$(shell id -g) \
+		-e HOME=/home/eval \
 		-e ANTHROPIC_API_KEY \
 		-e ARM=$(ARM) -e MAINT=$(MAINT) -e PILOT=$(PILOT) -e RESUME=$(RESUME) \
 		-e MODEL=$(MODEL) -e TASK_TIMEOUT=$(TASK_TIMEOUT) \
@@ -61,6 +63,8 @@ eval: validate build network
 		$(IMAGE_NAME) /eval/adapters/$(BENCH)/populate.sh
 	docker run --rm \
 		--network=eval-net \
+		--user $(shell id -u):$(shell id -g) \
+		-e HOME=/home/eval \
 		-e ANTHROPIC_API_KEY \
 		-e ARM=$(ARM) -e MAINT=$(MAINT) -e PILOT=$(PILOT) -e RESUME=$(RESUME) \
 		-e MODEL=$(MODEL) -e TASK_TIMEOUT=$(TASK_TIMEOUT) \
