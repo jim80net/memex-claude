@@ -8,7 +8,7 @@ MAINT ?= none
 PILOT ?= 0
 RESUME ?= false
 PILOT_BASE ?= 0
-RUN_ID ?= $(shell date +%Y%m%dT%H%M%S)
+RUN_ID := $(shell date +%Y%m%dT%H%M%S)
 
 # Valid (ARM, MAINT) combinations
 VALID_cold   := none
