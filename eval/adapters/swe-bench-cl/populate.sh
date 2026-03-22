@@ -3,13 +3,14 @@
 # SWE-Bench-CL base tasks are the first portion of each sequence (set by BASE_SPLIT in setup.sh).
 # Tasks are ordered by (sequence_id, sequence_position) — chronological within each repo.
 #
-# Env vars: ARM, MAINT, PILOT, RESUME, MODEL, TASK_TIMEOUT, MAINT_TIMEOUT, DAILY_BATCH_SIZE
+# Env vars: ARM, MAINT, PILOT, PILOT_BASE, RESUME, MODEL, TASK_TIMEOUT, MAINT_TIMEOUT, DAILY_BATCH_SIZE
 set -euo pipefail
 
 DATA_DIR="/eval/data/swe-bench-cl"
 CHECKPOINT="/eval/raw/checkpoint.txt"
 TASK_FILE="$DATA_DIR/base_tasks.jsonl"
 BATCH_SIZE="${DAILY_BATCH_SIZE:-4}"
+PILOT_BASE="${PILOT_BASE:-0}"
 TURN=0
 
 # Cold arm skips population entirely
@@ -19,6 +20,10 @@ if [ "$ARM" = "cold" ]; then
 fi
 
 TOTAL=$(wc -l < "$TASK_FILE")
+if [ "$PILOT_BASE" -gt 0 ] && [ "$PILOT_BASE" -lt "$TOTAL" ]; then
+    echo "[populate] Pilot mode: running $PILOT_BASE of $TOTAL base tasks"
+    TOTAL="$PILOT_BASE"
+fi
 echo "[populate] Phase 1: $TOTAL base tasks, ARM=$ARM, MAINT=$MAINT"
 
 # Resume support
@@ -37,6 +42,11 @@ fi
 
 while IFS= read -r line; do
     TURN=$((TURN + 1))
+
+    # Pilot base limit
+    if [ "$PILOT_BASE" -gt 0 ] && [ "$TURN" -gt "$PILOT_BASE" ]; then
+        break
+    fi
 
     # Skip already-completed tasks on resume
     if [ "$TURN" -lt "$START_LINE" ]; then

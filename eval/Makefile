@@ -7,6 +7,7 @@ ARM ?= cold
 MAINT ?= none
 PILOT ?= 0
 RESUME ?= false
+PILOT_BASE ?= 0
 RUN_ID ?= $(shell date +%Y%m%dT%H%M%S)
 
 # Valid (ARM, MAINT) combinations
@@ -59,6 +60,7 @@ eval: validate build network
 		-e ARM=$(ARM) -e MAINT=$(MAINT) -e PILOT=$(PILOT) -e RESUME=$(RESUME) \
 		-e MODEL=$(MODEL) -e TASK_TIMEOUT=$(TASK_TIMEOUT) \
 		-e MAINT_TIMEOUT=$(MAINT_TIMEOUT) -e DAILY_BATCH_SIZE=$(DAILY_BATCH_SIZE) \
+		-e PILOT_BASE=$(PILOT_BASE) \
 		-v /tmp/memex-eval/$(RUN_ID)/claude-home:/home/eval/.claude \
 		-v /tmp/memex-eval/$(RUN_ID)/claude.json:/home/eval/.claude.json \
 		-v /tmp/memex-eval/$(RUN_ID)/snapshots:/eval/snapshots \
