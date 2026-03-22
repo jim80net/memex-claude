@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# run.sh — Phase 2: Run related tasks and capture patches
+# run.sh — Phase 2: Run eval tasks and capture patches
+# SWE-Bench-CL eval tasks are the latter portion of each sequence (set by BASE_SPLIT in setup.sh).
+# These are later tasks in the chronological sequence — they may benefit from memory accumulated
+# during Phase 1 base tasks on the same repo.
+#
 # Env vars: ARM, PILOT, RESUME, MODEL, TASK_TIMEOUT
 set -euo pipefail
 
-DATA_DIR="/eval/data/swe-contextbench"
+DATA_DIR="/eval/data/swe-bench-cl"
 CHECKPOINT="/eval/checkpoint-phase2.txt"
-TASK_FILE="$DATA_DIR/related_tasks.jsonl"
+TASK_FILE="$DATA_DIR/eval_tasks.jsonl"
 PILOT="${PILOT:-0}"
 
 TOTAL=$(wc -l < "$TASK_FILE")
 if [ "$PILOT" -gt 0 ] && [ "$PILOT" -lt "$TOTAL" ]; then
     TOTAL="$PILOT"
-    echo "[run] Pilot mode: running $PILOT of $(wc -l < "$TASK_FILE") related tasks"
+    echo "[run] Pilot mode: running $PILOT of $(wc -l < "$TASK_FILE") eval tasks"
 fi
 
-echo "[run] Phase 2: $TOTAL related tasks, ARM=$ARM"
+echo "[run] Phase 2: $TOTAL eval tasks, ARM=$ARM"
 
 # Resume support
 START_LINE=1
@@ -48,7 +52,7 @@ while IFS= read -r line; do
     /eval/scripts/invoke-task.sh "$TASK_ID" "$REPO" "$COMMIT" "$ISSUE_FILE" || true
 
     # Snapshot
-    /eval/scripts/snapshot.sh "eval-${TURN}" "related: $TASK_ID"
+    /eval/scripts/snapshot.sh "eval-${TURN}" "eval: $TASK_ID"
 
     # Write checkpoint
     echo "$((TURN + 1))" > "$CHECKPOINT"

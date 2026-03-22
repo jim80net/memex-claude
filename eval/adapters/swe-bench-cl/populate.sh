@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# populate.sh — Phase 1: Run base tasks to accumulate memory
+# populate.sh — Phase 1: Run base tasks chronologically to accumulate memory
+# SWE-Bench-CL base tasks are the first portion of each sequence (set by BASE_SPLIT in setup.sh).
+# Tasks are ordered by (sequence_id, sequence_position) — chronological within each repo.
+#
 # Env vars: ARM, MAINT, PILOT, RESUME, MODEL, TASK_TIMEOUT, MAINT_TIMEOUT, DAILY_BATCH_SIZE
 set -euo pipefail
 
-DATA_DIR="/eval/data/swe-contextbench"
+DATA_DIR="/eval/data/swe-bench-cl"
 CHECKPOINT="/eval/checkpoint.txt"
 TASK_FILE="$DATA_DIR/base_tasks.jsonl"
 BATCH_SIZE="${DAILY_BATCH_SIZE:-4}"

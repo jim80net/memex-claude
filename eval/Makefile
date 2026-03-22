@@ -2,7 +2,7 @@
 include eval.env
 export
 
-BENCH ?= swe-contextbench
+BENCH ?= swe-bench-cl
 ARM ?= cold
 MAINT ?= none
 PILOT ?= 0
@@ -53,7 +53,7 @@ eval: validate build network
 		-v /tmp/memex-eval/$(RUN_ID)/snapshots:/eval/snapshots \
 		-v /tmp/memex-eval/$(RUN_ID)/raw:/eval/raw \
 		-v $(CURDIR)/data:/eval/data:ro \
-		-v $(CURDIR)/data/swe-contextbench/workdir:/eval/workdir \
+		-v $(CURDIR)/data/swe-bench-cl/workdir:/eval/workdir \
 		$(IMAGE_NAME) /eval/adapters/$(BENCH)/populate.sh
 	docker run --rm \
 		--network=eval-net \
@@ -64,7 +64,7 @@ eval: validate build network
 		-v /tmp/memex-eval/$(RUN_ID)/snapshots:/eval/snapshots \
 		-v /tmp/memex-eval/$(RUN_ID)/raw:/eval/raw \
 		-v $(CURDIR)/data:/eval/data:ro \
-		-v $(CURDIR)/data/swe-contextbench/workdir:/eval/workdir \
+		-v $(CURDIR)/data/swe-bench-cl/workdir:/eval/workdir \
 		$(IMAGE_NAME) /eval/adapters/$(BENCH)/run.sh
 	scripts/collect-results.sh $(BENCH) $(ARM) $(MAINT) $(RUN_ID)
 

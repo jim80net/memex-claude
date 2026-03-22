@@ -1,2 +1,0 @@
-{"instance_id": "test__repo-001", "repo": "test/repo", "base_commit": "HEAD", "problem_statement": "Fix: add a file called hello.txt with 'hello world'"}
-{"instance_id": "test__repo-002", "repo": "test/repo", "base_commit": "HEAD", "problem_statement": "Fix: add a file called goodbye.txt with 'goodbye world'"}

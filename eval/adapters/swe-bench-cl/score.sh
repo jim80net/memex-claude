@@ -5,7 +5,7 @@ set -euo pipefail
 
 RESULTS_DIR="${1:?Usage: score.sh <results-dir>}"
 PREDICTIONS="$RESULTS_DIR/raw/predictions.jsonl"
-DATA_DIR="$(cd "$(dirname "$0")/../../data/swe-contextbench" && pwd)"
+DATA_DIR="$(cd "$(dirname "$0")/../../data/swe-bench-cl" && pwd)"
 EVAL_LOG="$RESULTS_DIR/eval-logs"
 
 if [ ! -f "$PREDICTIONS" ]; then
@@ -18,7 +18,7 @@ mkdir -p "$EVAL_LOG"
 
 python3 -m swebench.harness.run_evaluation \
     --predictions_path "$PREDICTIONS" \
-    --swe_bench_tasks "$DATA_DIR/related_tasks.jsonl" \
+    --swe_bench_tasks "$DATA_DIR/eval_tasks.jsonl" \
     --log_dir "$EVAL_LOG" \
     --timeout 300 \
     2>&1 | tee "$RESULTS_DIR/eval.log"
@@ -59,7 +59,7 @@ for meta_file in sorted(glob.glob(os.path.join(raw_dir, 'task-*.meta.json'))):
 
 total_tasks = len(per_task)
 metrics = {
-    'benchmark': 'swe-contextbench',
+    'benchmark': 'swe-bench-cl',
     'arm': os.environ.get('ARM', 'unknown'),
     'maintenance': os.environ.get('MAINT', 'unknown'),
     'timestamp': '',
