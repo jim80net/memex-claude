@@ -37,12 +37,12 @@ setup:
 
 eval: validate build network
 	@echo "=== Eval: BENCH=$(BENCH) ARM=$(ARM) MAINT=$(MAINT) PILOT=$(PILOT) RUN_ID=$(RUN_ID) ==="
-	mkdir -p /tmp/memex-eval/$(RUN_ID)/{claude-home,snapshots,raw}
+	mkdir -p /tmp/memex-eval/$(RUN_ID)/claude-home /tmp/memex-eval/$(RUN_ID)/snapshots /tmp/memex-eval/$(RUN_ID)/raw
 	cd /tmp/memex-eval/$(RUN_ID)/snapshots && git init && \
 		git config user.email "eval@memex" && git config user.name "memex-eval"
 	cp configs/memex-$(ARM).json /tmp/memex-eval/$(RUN_ID)/claude-home/memex.json
 	cp configs/settings-$(ARM).json /tmp/memex-eval/$(RUN_ID)/claude-home/settings.json
-	mkdir -p /tmp/memex-eval/$(RUN_ID)/claude-home/{skills,rules,cache/sessions,projects}
+	mkdir -p /tmp/memex-eval/$(RUN_ID)/claude-home/skills /tmp/memex-eval/$(RUN_ID)/claude-home/rules /tmp/memex-eval/$(RUN_ID)/claude-home/cache/sessions /tmp/memex-eval/$(RUN_ID)/claude-home/projects
 	@# Copy OAuth credentials if present (for Claude Max subscriptions)
 	@if [ -f "$(HOME)/.claude/.credentials.json" ]; then \
 		cp "$(HOME)/.claude/.credentials.json" /tmp/memex-eval/$(RUN_ID)/claude-home/.credentials.json; \
