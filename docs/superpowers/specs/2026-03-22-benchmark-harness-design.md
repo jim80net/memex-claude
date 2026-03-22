@@ -135,14 +135,19 @@ echo "<issue description>" | timeout 900 claude --print \
 
 # Extract patch
 git diff > /eval/raw/task-${TASK_ID}.patch
-git checkout .  # reset for next task
+git checkout . && git clean -fd  # full reset for next task
 ```
 
 **Maintenance invocation** (sleep + deep-sleep):
 
+Since SWE-bench Lite spans multiple repositories (django, scikit-learn, sympy, etc.) and memex partitions memories by `encodeProjectPath(cwd)`, maintenance must run **per-repo**:
+
 ```bash
-echo "/sleep" | timeout 600 claude --print --cwd /eval/workdir/<repo>
-echo "/deep-sleep" | timeout 600 claude --print --cwd /eval/workdir/<repo>
+# maintenance.sh iterates over all repos that had tasks in this batch
+for repo in /eval/workdir/*/; do
+  echo "/sleep" | timeout 600 claude --print --cwd "$repo"
+  echo "/deep-sleep" | timeout 600 claude --print --cwd "$repo"
+done
 ```
 
 ### Controlling Claude Native Memory
@@ -210,23 +215,30 @@ RUN apt-get update && apt-get install -y python3 python3-pip python3-venv git cu
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
+# Memex binary (copied from host build, root-owned, world-executable)
+COPY dist/memex /usr/local/bin/memex
+RUN chmod 755 /usr/local/bin/memex
+
 # Non-root eval user
 RUN useradd -m -s /bin/bash eval
-USER eval
-WORKDIR /home/eval
 
-# Memex binary (copied from host build)
-COPY --chown=eval:eval dist/memex /usr/local/bin/memex
+# Hook registration (must match Claude Code's hook discovery path)
+# Claude Code discovers hooks via ~/.claude/settings.json "hooks" key,
+# which references the memex binary. The settings.json is generated
+# per-arm by the adapter and bind-mounted at runtime.
+RUN mkdir -p /home/eval/.claude && chown -R eval:eval /home/eval/.claude
 
-# Hook registration
-COPY --chown=eval:eval hooks/hooks.json /home/eval/.claude/hooks/memex-claude/hooks.json
-
-# Eval scripts
+# Eval scripts + workspace
+RUN mkdir -p /eval/scripts /eval/adapters /eval/snapshots /eval/raw && \
+    chown -R eval:eval /eval
 COPY --chown=eval:eval eval/scripts/ /eval/scripts/
 COPY --chown=eval:eval eval/adapters/ /eval/adapters/
 
+USER eval
+WORKDIR /home/eval
+
 # Snapshot git repo init
-RUN mkdir -p /eval/snapshots && cd /eval/snapshots && git init && \
+RUN cd /eval/snapshots && git init && \
     git config user.email "eval@memex" && git config user.name "memex-eval"
 ```
 
@@ -255,10 +267,14 @@ eval/
   Makefile
   Dockerfile
   configs/
-    cold.json                      # memex disabled, native disabled
-    native.json                    # memex disabled, native enabled
-    memex.json                     # memex enabled, native disabled
-    both.json                      # memex enabled, native enabled
+    memex-cold.json                # memex: disabled
+    memex-native.json              # memex: disabled
+    memex-memex.json               # memex: enabled, hooks configured
+    memex-both.json                # memex: enabled, hooks configured
+    settings-cold.json             # native memory: disabled
+    settings-native.json           # native memory: enabled
+    settings-memex.json            # native memory: disabled
+    settings-both.json             # native memory: enabled
   adapters/
     swe-contextbench/
       setup.sh                     # download dataset, prepare SWE-bench harness
@@ -403,7 +419,7 @@ validate:
 
 | Step | What Happens |
 |------|-------------|
-| `setup.sh` | Downloads SWE-ContextBench dataset (300 base + 99 related tasks). Clones target repos to `/eval/workdir/<repo-name>`. Installs SWE-bench evaluation harness on host. |
+| `setup.sh` | **Runs on the host** (not in the eval container). Downloads SWE-ContextBench dataset to `eval/data/`. Clones target repos. Installs SWE-bench evaluation harness (Python). Data is bind-mounted read-only into containers. |
 | `populate.sh` | **Phase 1 — Population.** Cold arm: skips entirely. Native arm: runs 300 base tasks with native memory enabled, memex disabled. Memex arms: runs 300 base tasks with memex hooks active, native memory disabled; runs maintenance cycles at configured intervals (per-session or every 4-5 tasks). Both arms: runs with both active. Snapshots after each task and each maintenance window. |
 | `run.sh` | **Phase 2 — Evaluation.** Runs the 99 related tasks against the memory state accumulated in Phase 1. All arms execute this phase. Captures generated patches. Snapshots after each task. |
 | `score.sh` | Runs on host (not in eval container). Feeds patches to SWE-bench evaluation harness. Produces `metrics.json`. |
@@ -461,6 +477,31 @@ validate:
 Assumes ~5 min average per task invocation. Pilot set (20 related tasks, proportional base tasks): ~15% of full cost and time.
 
 **Parallelism**: Arms are fully independent and can run in parallel containers. With 7 concurrent containers, wall-clock time drops to ~58 hours (bounded by the slowest arm). In CI, the Makefile's `eval-all` target can launch arms in parallel via `make -j7`.
+
+### Configurable Parameters
+
+The following values are configurable via Makefile variables or a top-level `eval/eval.env` file, not hardcoded in adapter scripts:
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `MODEL` | `claude-sonnet-4-20250514` | Pin to specific model version for reproducibility. Update when model changes. |
+| `TASK_TIMEOUT` | `900` (15 min) | Per-task timeout in seconds |
+| `MAINT_TIMEOUT` | `600` (10 min) | Per-maintenance-cycle timeout |
+| `DAILY_BATCH_SIZE` | `4` | Tasks per simulated "day" before maintenance |
+| `PILOT` | `0` (full run) | Number of related tasks for pilot; 0 = full |
+
+### Error Handling and Resumption
+
+With ~2,643 invocations, API failures are inevitable. The harness handles this via:
+
+- **Per-task error capture**: If a task times out or the API returns an error, the task is logged as `"resolved": false, "error": "<reason>"` in `metrics.json`. The run continues to the next task.
+- **Checkpoint file**: After each task, `run.sh` writes the current task index to `/eval/checkpoint.txt`. On restart with `RESUME=true`, the adapter skips completed tasks and resumes from the checkpoint.
+- **Idempotent snapshots**: The git snapshot includes the checkpoint, so a resumed run picks up the correct memory state.
+
+```makefile
+# Resume a crashed run
+make eval BENCH=swe-contextbench ARM=memex MAINT=daily RESUME=true RUN_ID=<previous-run-id>
+```
 
 ### Cost Mitigation
 
