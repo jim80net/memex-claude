@@ -18,4 +18,4 @@ bin/.installing.lock
 .gitnexus
 
 eval/data/
-eval/results/
+# eval/results/ is tracked — pilot results are checked in for PR review
