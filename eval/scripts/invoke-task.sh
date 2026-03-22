@@ -23,8 +23,8 @@ START_TIME=$(date +%s)
 EXIT_CODE=0
 cat "$ISSUE_FILE" | timeout "$TASK_TIMEOUT" claude --print \
     --model "$MODEL" \
-    --cwd "$WORKDIR" \
     --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+    --dangerously-skip-permissions \
     2>"$RAW_DIR/task-${TASK_ID}.stderr" \
     >"$RAW_DIR/task-${TASK_ID}.stdout" || EXIT_CODE=$?
 END_TIME=$(date +%s)

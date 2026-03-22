@@ -10,10 +10,10 @@ for repo in /eval/workdir/*/; do
     [ -d "$repo" ] || continue
     repo_name=$(basename "$repo")
     echo "[maintenance] Running /sleep on $repo_name"
-    echo "/sleep" | timeout "$MAINT_TIMEOUT" claude --print \
-        --model "$MODEL" --cwd "$repo" 2>/dev/null || true
+    cd "$repo" && echo "/sleep" | timeout "$MAINT_TIMEOUT" claude --print \
+        --model "$MODEL" --dangerously-skip-permissions 2>/dev/null || true
 
     echo "[maintenance] Running /deep-sleep on $repo_name"
-    echo "/deep-sleep" | timeout "$MAINT_TIMEOUT" claude --print \
-        --model "$MODEL" --cwd "$repo" 2>/dev/null || true
+    cd "$repo" && echo "/deep-sleep" | timeout "$MAINT_TIMEOUT" claude --print \
+        --model "$MODEL" --dangerously-skip-permissions 2>/dev/null || true
 done
