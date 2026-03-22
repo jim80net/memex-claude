@@ -26,7 +26,7 @@ validate:
 	fi
 
 build:
-	cd .. && docker build -t $(IMAGE_NAME) -f eval/Dockerfile .
+	cd .. && DOCKER_BUILDKIT=0 docker build -t $(IMAGE_NAME) -f eval/Dockerfile .
 
 network:
 	docker network inspect eval-net >/dev/null 2>&1 || \
