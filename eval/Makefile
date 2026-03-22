@@ -47,6 +47,10 @@ eval: validate build network
 	@if [ -f "$(HOME)/.claude/.credentials.json" ]; then \
 		cp "$(HOME)/.claude/.credentials.json" /tmp/memex-eval/$(RUN_ID)/claude-home/.credentials.json; \
 	fi
+	@# Copy Claude config file (required for auth)
+	@if [ -f "$(HOME)/.claude.json" ]; then \
+		cp "$(HOME)/.claude.json" /tmp/memex-eval/$(RUN_ID)/claude.json; \
+	fi
 	docker run --rm \
 		--network=eval-net \
 		--user $(shell id -u):$(shell id -g) \
@@ -56,6 +60,7 @@ eval: validate build network
 		-e MODEL=$(MODEL) -e TASK_TIMEOUT=$(TASK_TIMEOUT) \
 		-e MAINT_TIMEOUT=$(MAINT_TIMEOUT) -e DAILY_BATCH_SIZE=$(DAILY_BATCH_SIZE) \
 		-v /tmp/memex-eval/$(RUN_ID)/claude-home:/home/eval/.claude \
+		-v /tmp/memex-eval/$(RUN_ID)/claude.json:/home/eval/.claude.json \
 		-v /tmp/memex-eval/$(RUN_ID)/snapshots:/eval/snapshots \
 		-v /tmp/memex-eval/$(RUN_ID)/raw:/eval/raw \
 		-v $(CURDIR)/data:/eval/data:ro \
@@ -69,6 +74,7 @@ eval: validate build network
 		-e ARM=$(ARM) -e MAINT=$(MAINT) -e PILOT=$(PILOT) -e RESUME=$(RESUME) \
 		-e MODEL=$(MODEL) -e TASK_TIMEOUT=$(TASK_TIMEOUT) \
 		-v /tmp/memex-eval/$(RUN_ID)/claude-home:/home/eval/.claude \
+		-v /tmp/memex-eval/$(RUN_ID)/claude.json:/home/eval/.claude.json \
 		-v /tmp/memex-eval/$(RUN_ID)/snapshots:/eval/snapshots \
 		-v /tmp/memex-eval/$(RUN_ID)/raw:/eval/raw \
 		-v $(CURDIR)/data:/eval/data:ro \
