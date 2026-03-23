@@ -1,0 +1,62 @@
+diff --git a/xarray/core/dtypes.py b/xarray/core/dtypes.py
+index 4d8583cf..47042781 100644
+--- a/xarray/core/dtypes.py
++++ b/xarray/core/dtypes.py
+@@ -40,7 +40,7 @@ NINF = AlwaysLessThan()
+ PROMOTE_TO_OBJECT = [
+     {np.number, np.character},  # numpy promotes to character
+     {np.bool_, np.character},  # numpy promotes to character
+-    {np.bytes_, np.unicode_},  # numpy promotes to unicode
++    {np.bytes_, np.str_},  # numpy promotes to unicode
+ ]
+ 
+ 
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index ba937183..21188741 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1532,7 +1532,10 @@ class PandasMultiIndexingAdapter(PandasIndexingAdapter):
+ 
+     def __array__(self, dtype: DTypeLike = None) -> np.ndarray:
+         if self.level is not None:
+-            return self.array.get_level_values(self.level).values
++            if dtype is None:
++                dtype = self.dtype
++            level_values = self.array.get_level_values(self.level)
++            return np.asarray(level_values.values, dtype=dtype)
+         else:
+             return super().__array__(dtype)
+ 
+diff --git a/xarray/tests/test_dataset.py b/xarray/tests/test_dataset.py
+index 6ab4c40c..c58d8829 100644
+--- a/xarray/tests/test_dataset.py
++++ b/xarray/tests/test_dataset.py
+@@ -3526,6 +3526,28 @@ class TestDataset:
+         assert_identical(expected, actual)
+         assert list(actual.xindexes) == ["z", "xx", "y"]
+ 
++    def test_stack_dtype_preservation(self) -> None:
++        """Test that stack preserves coordinate dtypes, especially int32."""
++        # Test single coordinate with int32 dtype
++        ds = Dataset(coords={'a': np.array([0], dtype='i4')})
++        actual = ds.stack(b=('a',))
++        assert ds['a'].values.dtype == actual['a'].values.dtype
++
++        # Test multiple coordinates with different dtypes
++        ds = Dataset(coords={
++            'x': np.array([0, 1], dtype='i4'),  # int32
++            'y': np.array([0, 1], dtype='i2'),  # int16
++        })
++        actual = ds.stack(z=('x', 'y'))
++        assert ds['x'].values.dtype == actual['x'].values.dtype
++        assert ds['y'].values.dtype == actual['y'].values.dtype
++
++        # Test with various integer dtypes
++        for dtype_str in ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4']:
++            ds = Dataset(coords={'coord': np.array([0, 1], dtype=dtype_str)})
++            actual = ds.stack(stacked=('coord',))
++            assert ds['coord'].values.dtype == actual['coord'].values.dtype, f"Failed for dtype {dtype_str}"
++
+     def test_unstack(self) -> None:
+         index = pd.MultiIndex.from_product([[0, 1], ["a", "b"]], names=["x", "y"])
+         ds = Dataset(data_vars={"b": ("z", [0, 1, 2, 3])}, coords={"z": index})

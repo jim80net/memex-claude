@@ -1,0 +1,56 @@
+## Summary
+
+I have successfully identified and fixed the bug in `IsolationForest` where inappropriate feature name validation warnings were being triggered when using `contamination != "auto"` with pandas DataFrames.
+
+### Root Cause Analysis
+
+The issue occurs in the `IsolationForest.fit()` method:
+
+1. When `contamination != "auto"`, line 348 calls `self.score_samples(X)` to compute the contamination percentile
+2. `score_samples(X)` calls `self._validate_data(X, accept_sparse="csr", dtype=np.float32, reset=False)`  
+3. This converts the pandas DataFrame to a NumPy array, losing feature names
+4. The feature name validation with `reset=False` then sees a mismatch (fitted with feature names, but current X has no feature names) and incorrectly warns
+
+### Fix Applied
+
+**File:** `sklearn/ensemble/_iforest.py` (lines 348-349)
+
+**Before:**
+```python
+self.offset_ = np.percentile(self.score_samples(X), 100.0 * self.contamination)
+```
+
+**After:**
+```python
+# Use internal scoring to avoid feature name validation warnings
+# since X is the same data that was just validated in fit()
+X_for_scoring = check_array(X, accept_sparse="csr", dtype=np.float32)
+scores = -self._compute_chunked_score_samples(X_for_scoring)
+self.offset_ = np.percentile(scores, 100.0 * self.contamination)
+```
+
+This fix:
+- Bypasses the inappropriate feature name validation during internal calls in `fit()`
+- Maintains identical functionality by replicating what `score_samples()` does internally
+- Uses the same data conversion (`check_array` with identical parameters)
+- Preserves the correct score calculation (with negation)
+
+### Test Case Added
+
+**File:** `sklearn/ensemble/tests/test_iforest.py`
+
+Added `test_iforest_no_feature_names_warning_with_contamination()` which:
+- Tests both `contamination="auto"` and custom contamination values
+- Verifies no warnings are raised when using pandas DataFrames
+- Confirms feature names are properly preserved
+- Uses `warnings.simplefilter("error")` to catch any warnings that would occur
+
+### Verification
+
+The fix is correct because:
+1. It replicates the exact same functionality as `score_samples()` 
+2. It only affects the internal call during `fit()` with the same validated data
+3. It maintains all the same data transformations and calculations
+4. The test case will catch any regression of this issue
+
+This resolves the bug described in the GitHub issue without affecting any other functionality.

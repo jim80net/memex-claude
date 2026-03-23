@@ -1,0 +1,113 @@
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 144eadeae2..5f6b12e299 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -1447,10 +1447,12 @@ class QuadContourSet(ContourSet):
+             fn = 'contour'
+         nargs = len(args)
+         if nargs <= 2:
++            z_orig = args[0]  # Store original before conversion
+             z = ma.asarray(args[0], dtype=np.float64)
+             x, y = self._initialize_x_y(z)
+             args = args[1:]
+         elif nargs <= 4:
++            z_orig = args[2]  # Store original before conversion
+             x, y, z = self._check_xyz(args[:3], kwargs)
+             args = args[3:]
+         else:
+@@ -1462,6 +1464,23 @@ class QuadContourSet(ContourSet):
+             z = ma.masked_where(z <= 0, z)
+             _api.warn_external('Log scale: values of z <= 0 have been masked')
+             self.zmin = float(z.min())
++
++        # Auto-detect boolean arrays and set levels=[0.5] if no levels specified
++        if self.levels is None:
++            z_orig_array = np.asarray(z_orig)
++            if z_orig_array.dtype == np.bool_:
++                # Directly boolean array
++                self.levels = [0.5]
++            elif np.issubdtype(z_orig_array.dtype, np.integer):
++                # Check if integer array contains only 0s and 1s (boolean-like)
++                # Handle masked arrays by getting the compressed data
++                if hasattr(z_orig_array, 'compressed'):
++                    unique_vals = np.unique(z_orig_array.compressed())
++                else:
++                    unique_vals = np.unique(z_orig_array[~np.isnan(z_orig_array)])
++                if len(unique_vals) <= 2 and all(val in {0, 1} for val in unique_vals):
++                    self.levels = [0.5]
++
+         self._process_contour_level_args(args)
+         return (x, y, z)
+ 
+diff --git a/lib/matplotlib/tests/test_contour.py b/lib/matplotlib/tests/test_contour.py
+index e42206b8cb..a1cf526a61 100644
+--- a/lib/matplotlib/tests/test_contour.py
++++ b/lib/matplotlib/tests/test_contour.py
+@@ -111,6 +111,67 @@ def test_contour_uniform_z():
+     assert len(record) == 1
+ 
+ 
++def test_contour_bool_autolevel():
++    # Test auto-detection of boolean arrays and automatic level setting
++    # Boolean arrays should automatically get levels=[0.5]
++    x = np.arange(10)
++    y = np.arange(9)
++
++    # Test with actual boolean array
++    z_bool = np.zeros((9, 10), dtype=bool)
++    z_bool[2:7, 3:8] = True
++
++    fig, ax = plt.subplots()
++    cs_bool = ax.contour(x, y, z_bool)
++    assert cs_bool.levels == [0.5], f"Boolean array should have levels=[0.5], got {cs_bool.levels}"
++
++    # Test with 0/1 integer array (boolean-like)
++    z_int = z_bool.astype(int)
++    fig, ax = plt.subplots()
++    cs_int = ax.contour(x, y, z_int)
++    assert cs_int.levels == [0.5], f"0/1 integer array should have levels=[0.5], got {cs_int.levels}"
++
++    # Test that explicit levels override auto-detection
++    fig, ax = plt.subplots()
++    cs_explicit = ax.contour(x, y, z_bool, levels=[0.3, 0.7])
++    assert cs_explicit.levels.tolist() == [0.3, 0.7], f"Explicit levels should be preserved, got {cs_explicit.levels}"
++
++    # Test with contourf
++    fig, ax = plt.subplots()
++    cs_filled = ax.contourf(x, y, z_bool)
++    assert cs_filled.levels == [0.5], f"Boolean contourf should have levels=[0.5], got {cs_filled.levels}"
++
++
++def test_contour_bool_edge_cases():
++    # Test edge cases for boolean auto-detection
++    x = np.arange(5)
++    y = np.arange(4)
++
++    # Test with all zeros (should still get [0.5])
++    z_zeros = np.zeros((4, 5), dtype=bool)
++    fig, ax = plt.subplots()
++    cs_zeros = ax.contour(x, y, z_zeros)
++    assert cs_zeros.levels == [0.5], f"All-zeros boolean should have levels=[0.5], got {cs_zeros.levels}"
++
++    # Test with all ones (should still get [0.5])
++    z_ones = np.ones((4, 5), dtype=bool)
++    fig, ax = plt.subplots()
++    cs_ones = ax.contour(x, y, z_ones)
++    assert cs_ones.levels == [0.5], f"All-ones boolean should have levels=[0.5], got {cs_ones.levels}"
++
++    # Test with regular integer array (not 0/1) - should use normal behavior
++    z_regular = np.arange(20).reshape((4, 5))
++    fig, ax = plt.subplots()
++    cs_regular = ax.contour(x, y, z_regular)
++    assert len(cs_regular.levels) > 1, f"Regular integer array should have multiple levels, got {cs_regular.levels}"
++
++    # Test with integer array containing only zeros (should get [0.5])
++    z_int_zeros = np.zeros((4, 5), dtype=int)
++    fig, ax = plt.subplots()
++    cs_int_zeros = ax.contour(x, y, z_int_zeros)
++    assert cs_int_zeros.levels == [0.5], f"All-zeros integer should have levels=[0.5], got {cs_int_zeros.levels}"
++
++
+ @image_comparison(['contour_manual_labels'], remove_text=True, style='mpl20')
+ def test_contour_manual_labels():
+     x, y = np.meshgrid(np.arange(0, 10), np.arange(0, 10))

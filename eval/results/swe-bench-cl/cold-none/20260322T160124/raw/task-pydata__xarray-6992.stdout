@@ -1,0 +1,50 @@
+## Summary
+
+I've successfully identified and fixed the `DataVariables.__len__` bug in xarray. Here's what was done:
+
+### **Problem Analysis**
+The issue occurred after the index refactor where `Dataset._coord_names` could contain more entries than `Dataset._variables`. The original implementation in `DataVariables.__len__()` used simple subtraction:
+
+```python
+def __len__(self) -> int:
+    return len(self._dataset._variables) - len(self._dataset._coord_names)
+```
+
+This could return negative values when `_coord_names` had more entries than `_variables`, causing Python to raise `ValueError: __len__() should return >= 0`.
+
+### **Root Cause**
+The problematic scenario occurs when:
+1. A dataset is created with coordinates: `ds = xr.Dataset(coords={"a": ("x", [1, 2, 3]), "b": ("x", ['a', 'b', 'c'])})`
+2. An index is set: `ds.set_index(z=['a', 'b'])`
+3. The index is reset with `drop=True`: `.reset_index("z", drop=True)`
+
+This sequence can result in `_coord_names` referencing coordinates that no longer exist in `_variables`, violating the assumption that `len(_variables) >= len(_coord_names)`.
+
+### **Solution Applied**
+I replaced the buggy subtraction logic with a proper count that matches the `__iter__` implementation:
+
+**File:** `xarray/core/dataset.py:368`
+
+**Before:**
+```python
+def __len__(self) -> int:
+    return len(self._dataset._variables) - len(self._dataset._coord_names)
+```
+
+**After:**
+```python
+def __len__(self) -> int:
+    return sum(1 for key in self._dataset._variables if key not in self._dataset._coord_names)
+```
+
+### **Verification**
+The fix ensures that:
+1. `len(data_vars)` never returns negative values
+2. `len(data_vars)` is consistent with `len(list(data_vars))`  
+3. Only variables that are actually in `_variables` AND not in `_coord_names` are counted
+4. The dataset representation (`repr`) works correctly again
+
+### **Test Added**
+I also added a regression test in `xarray/tests/test_dataset.py` (`test_data_vars_len_after_index_operations`) to ensure this bug doesn't reoccur.
+
+The fix resolves the immediate issue and maintains consistency with the `DataVariables` class's iteration logic, ensuring that `__len__()` always returns the correct count of actual data variables.

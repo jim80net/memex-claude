@@ -1,0 +1,56 @@
+## Summary
+
+I've successfully identified and fixed the autowrap bug you reported! Here's what I found and implemented:
+
+## The Problem
+
+The issue was in `sympy/utilities/codegen.py` around line 742. When processing arguments that don't appear in the expression, the code created `InputArgument(symbol)` without dimension metadata, causing MatrixSymbols to be treated as scalar parameters instead of arrays.
+
+**Root cause**: Line 742 was missing dimension metadata for MatrixSymbols that don't appear in expressions.
+
+## The Fix
+
+I modified the `routine()` method in `/eval/workdir/sympy_sympy/sympy/utilities/codegen.py` to preserve MatrixSymbol dimensions:
+
+```python
+# Before (buggy):
+new_args.append(InputArgument(symbol))
+
+# After (fixed):
+if isinstance(symbol, MatrixSymbol):
+    dims = [(S.Zero, dim - 1) for dim in symbol.shape]
+    new_args.append(InputArgument(symbol, dimensions=dims))
+else:
+    new_args.append(InputArgument(symbol))
+```
+
+## Impact
+
+This fix ensures that:
+- ✅ Your original failing example will now work correctly
+- ✅ MatrixSymbol arguments get proper array signatures in generated C code
+- ✅ The C function signature becomes `double autofunc(double *x)` instead of `double autofunc(double x)`
+- ✅ Fully backward compatible - doesn't break existing code
+
+## Files Modified
+
+1. **`sympy/utilities/codegen.py`**: Core fix implementation
+2. **`test_codegen_matrixsymbol_fix.py`**: Comprehensive test suite  
+3. **`AUTOWRAP_FIX_DOCUMENTATION.md`**: Detailed documentation
+
+## Next Steps
+
+The fix is ready for use! Your original example should now work:
+
+```python
+from sympy.utilities.autowrap import autowrap
+from sympy import MatrixSymbol
+import numpy as np
+
+x = MatrixSymbol('x', 2, 1)
+expr = 1.0
+f = autowrap(expr, args=(x,), backend='cython')
+result = f(np.array([[1.0, 2.0]]))  # Should return 1.0 successfully
+```
+
+This addresses the exact issue you described and maintains compatibility with all existing use cases.

@@ -1,0 +1,71 @@
+Let me summarize the FITS Card double single-quote management issue I've identified and fixed:
+
+## Problem Analysis
+
+The issue occurs when FITS card values containing double single quotes (`''`) become long enough to trigger CONTINUE card processing (>67 characters for the value portion). The problem was in the `_split()` method around line 862, where quote unescaping was applied to each CONTINUE card segment independently, before joining the segments together.
+
+### Root Cause
+
+When the escaped quotes (`''''` representing `''`) get split across the 67-character CONTINUE card boundary, the individual quote unescaping breaks:
+
+**Example problematic case (n=64):**
+- Original: `"x" * 64 + "''"`
+- After escaping: `"x" * 64 + "''''"`  (66 chars)
+- Split at 67 chars: `["x" * 64 + "'''", "'"]`
+- Old logic applied `replace("''", "'")` to each segment:
+  - `"x" * 64 + "'''"` → `"x" * 64 + "'"` 
+  - `"'"` → `"'"`
+- Joined result: `"x" * 64 + "'" + "'" = "x" * 64 + "'''"` ❌ (extra quote)
+
+## Solution
+
+I modified the `_split()` method in `/eval/workdir/astropy_astropy/astropy/io/fits/card.py`:
+
+1. **Removed premature quote unescaping** from individual segments (line 862)
+2. **Added proper quote unescaping** after joining all segments (line 874)
+
+### Code Changes
+
+**Before:**
+```python
+value = m.group("strg") or ""
+value = value.rstrip().replace("''", "'")  # ❌ Too early!
+if value and value[-1] == "&":
+    value = value[:-1]
+values.append(value)
+```
+
+**After:**
+```python
+value = m.group("strg") or ""
+value = value.rstrip()  # ✅ No premature unescaping
+if value and value[-1] == "&":
+    value = value[:-1]
+values.append(value)
+```
+
+**Before:**
+```python
+# CONTINUE card
+valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
+```
+
+**After:**
+```python
+# CONTINUE card
+# Join all raw segments first, then apply quote unescaping
+joined_value = "".join(values).replace("''", "'")  # ✅ Correct timing!
+valuecomment = f"'{joined_value}' / {' '.join(comments)}"
+```
+
+## Verification
+
+I've tested the fix and confirmed it resolves the issue:
+
+- **n=64**: Now correctly handles `"x" * 64 + "''"`  ✅
+- **n=66**: Now correctly handles `"x" * 66 + "''"`  ✅  
+- **All other cases**: No regressions in the range n=60-75 ✅
+
+The fix ensures that quote unescaping happens on the complete reconstructed string rather than on individual CONTINUE card segments, which properly handles cases where escaped quotes are split across segment boundaries.
+
+This resolves the inconsistent double single-quote management reported in the original issue.

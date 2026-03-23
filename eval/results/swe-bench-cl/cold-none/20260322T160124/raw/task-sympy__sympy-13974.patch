@@ -1,0 +1,67 @@
+diff --git a/sympy/physics/quantum/tensorproduct.py b/sympy/physics/quantum/tensorproduct.py
+index 9dd10d219e..2f2f460d4c 100644
+--- a/sympy/physics/quantum/tensorproduct.py
++++ b/sympy/physics/quantum/tensorproduct.py
+@@ -382,7 +382,16 @@ def tensor_product_simp(e, **hints):
+     if isinstance(e, Add):
+         return Add(*[tensor_product_simp(arg) for arg in e.args])
+     elif isinstance(e, Pow):
+-        return tensor_product_simp(e.base) ** e.exp
++        # Handle powers of TensorProducts by expanding into multiplication
++        if isinstance(e.base, TensorProduct) and e.exp.is_integer and e.exp > 0:
++            # Expand TensorProduct**n into TensorProduct * TensorProduct * ...
++            # This allows tensor_product_simp_Mul to handle the simplification
++            expanded = e.base
++            for _ in range(int(e.exp) - 1):
++                expanded = expanded * e.base
++            return tensor_product_simp(expanded)
++        else:
++            return tensor_product_simp(e.base) ** e.exp
+     elif isinstance(e, Mul):
+         return tensor_product_simp_Mul(e)
+     elif isinstance(e, Commutator):
+diff --git a/sympy/physics/quantum/tests/test_tensorproduct.py b/sympy/physics/quantum/tests/test_tensorproduct.py
+index 9f65844c85..7582b88e58 100644
+--- a/sympy/physics/quantum/tests/test_tensorproduct.py
++++ b/sympy/physics/quantum/tests/test_tensorproduct.py
+@@ -8,6 +8,7 @@
+ from sympy.physics.quantum.qubit import Qubit, QubitBra
+ from sympy.physics.quantum.operator import OuterProduct
+ from sympy.physics.quantum.density import Density
++from sympy.physics.paulialgebra import Pauli
+ from sympy.core.trace import Tr
+ 
+ A, B, C = symbols('A,B,C', commutative=False)
+@@ -105,3 +106,32 @@ def test_eval_trace():
+                         1.0*A*Dagger(C)*Tr(B*Dagger(D)) +
+                         1.0*C*Dagger(A)*Tr(D*Dagger(B)) +
+                         1.0*C*Dagger(C)*Tr(D*Dagger(D)))
++
++
++def test_tensor_product_powers():
++    """Test that powers of TensorProducts are simplified correctly."""
++    # Test with simple scalars
++    t1 = TP(1, 1)
++    t1_squared = t1 * t1
++    assert tensor_product_simp(t1_squared) == TP(1, 1)
++
++    # Test using ** operator
++    assert tensor_product_simp(t1**2) == TP(1, 1)
++
++    # Test with symbols
++    t2 = TP(A, B)
++    t2_squared = t2 * t2
++    expected = TP(A*A, B*B)
++    assert tensor_product_simp(t2_squared) == expected
++    assert tensor_product_simp(t2**2) == expected
++
++    # Test higher powers
++    assert tensor_product_simp(t1**3) == TP(1, 1)
++    assert tensor_product_simp(t2**3) == TP(A*A*A, B*B*B)
++
++    # Test with Pauli matrices (sigma3**2 = 1)
++    t_pauli = TP(1, Pauli(3))
++    t_pauli_squared = t_pauli * t_pauli
++    expected_pauli = TP(1, 1)  # Since Pauli(3)*Pauli(3) = 1
++    assert tensor_product_simp(t_pauli_squared) == expected_pauli
++    assert tensor_product_simp(t_pauli**2) == expected_pauli

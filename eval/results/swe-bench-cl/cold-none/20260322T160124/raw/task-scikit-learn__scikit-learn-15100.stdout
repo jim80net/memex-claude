@@ -1,0 +1,55 @@
+## Summary
+
+I've successfully fixed the `strip_accents_unicode` bug in scikit-learn. Here's what was done:
+
+### **The Bug**
+The `strip_accents_unicode` function failed to strip accents from strings that were already in NFKD (Normalization Form Compatibility Decomposition) form. This happened because:
+
+1. The function first normalized the string using `unicodedata.normalize('NFKD', s)`
+2. If the normalized string was identical to the original (indicating it was already in NFKD form), it would return the original string unchanged
+3. This meant combining characters (like combining tildes) were never removed from pre-normalized strings
+
+### **The Fix**
+**File**: `sklearn/feature_extraction/text.py:114-136`
+
+**Before**:
+```python
+def strip_accents_unicode(s):
+    normalized = unicodedata.normalize('NFKD', s)
+    if normalized == s:
+        return s  # BUG: Returns original string if already normalized
+    else:
+        return ''.join([c for c in normalized if not unicodedata.combining(c)])
+```
+
+**After**:
+```python
+def strip_accents_unicode(s):
+    normalized = unicodedata.normalize('NFKD', s)
+    return ''.join([c for c in normalized if not unicodedata.combining(c)])
+```
+
+### **Test Case Added**
+**File**: `sklearn/feature_extraction/tests/test_text.py:96-106`
+
+Added a test case that verifies both single-codepoint accented characters and base+combining character sequences are normalized to the same result:
+
+```python
+# Test for NFKD form strings (issue with strings already in NFKD form)
+s1 = chr(241)  # ñ as single codepoint
+s2 = chr(110) + chr(771)  # n + combining tilde
+
+# Both should be normalized to 'n'
+assert strip_accents_unicode(s1) == 'n'
+assert strip_accents_unicode(s2) == 'n'
+assert strip_accents_unicode(s1) == strip_accents_unicode(s2)
+```
+
+### **Verification**
+The fix was verified to:
+✅ Correctly handle the reported bug case  
+✅ Maintain compatibility with existing functionality  
+✅ Pass all existing test cases  
+✅ Handle edge cases (empty strings, no accents, etc.)
+
+The issue is now resolved: both `chr(241)` (single codepoint ñ) and `chr(110) + chr(771)` (base n + combining tilde) now correctly normalize to `'n'`.

@@ -1,0 +1,52 @@
+## Summary
+
+I've successfully fixed the issue where `ModelChoiceField` was not including the invalid choice value in its validation error messages. Here's what was implemented:
+
+### Changes Made
+
+**1. Updated error message template in `django/forms/models.py`:**
+```python
+# Before
+'invalid_choice': _('Select a valid choice. That choice is not one of'
+                    ' the available choices.')
+
+# After  
+'invalid_choice': _('Select a valid choice. %(value)s is not one of'
+                    ' the available choices.')
+```
+
+**2. Updated `ValidationError` call in `ModelChoiceField.to_python()`:**
+```python
+# Before
+raise ValidationError(self.error_messages['invalid_choice'], code='invalid_choice')
+
+# After
+raise ValidationError(
+    self.error_messages['invalid_choice'],
+    code='invalid_choice', 
+    params={'value': value},
+)
+```
+
+**3. Updated all tests** that expected the old error message format in:
+- `/tests/model_forms/test_modelchoicefield.py` 
+- `/tests/model_forms/tests.py`
+- `/tests/model_formsets/tests.py`
+- `/tests/admin_widgets/tests.py`
+
+### Consistency Achieved
+
+The fix makes `ModelChoiceField` consistent with:
+- Its parent class `ChoiceField` 
+- Its sibling class `ModelMultipleChoiceField`
+
+Both of these already included the invalid value in their error messages.
+
+### Verification
+
+The implementation follows Django's established patterns:
+- Error message template includes `%(value)s` placeholder
+- `ValidationError` is raised with `params={'value': value}` 
+- All existing tests have been updated to expect the new message format
+
+Now when `ModelChoiceField` encounters an invalid choice, it will show a helpful error message like "Select a valid choice. 123 is not one of the available choices." instead of the generic "Select a valid choice. That choice is not one of the available choices."

@@ -1,0 +1,45 @@
+## Summary
+
+I've successfully implemented support for the `tzinfo` parameter in `TruncDate()` and `TruncTime()` functions. Here's what was fixed:
+
+### Changes Made
+
+**🔧 Fixed `/eval/workdir/django_django/django/db/models/functions/datetime.py`:**
+
+1. **TruncDate.as_sql()** (line 295): Changed from `timezone.get_current_timezone_name() if settings.USE_TZ else None` to `self.get_tzname()`
+
+2. **TruncTime.as_sql()** (line 308): Changed from `timezone.get_current_timezone_name() if settings.USE_TZ else None` to `self.get_tzname()` 
+
+**🧪 Added tests in `/eval/workdir/django_django/tests/db_functions/datetime/test_extract_trunc.py`:**
+
+1. **test_trunc_date_timezone_applied()**: Verifies that `TruncDate` respects the `tzinfo` parameter and produces different dates for the same UTC datetime in different timezones
+
+2. **test_trunc_time_timezone_applied()**: Verifies that `TruncTime` respects the `tzinfo` parameter and produces different times for the same UTC datetime in different timezones
+
+### How the Fix Works
+
+The issue was that `TruncDate` and `TruncTime` were overriding the `as_sql` method and hardcoding `timezone.get_current_timezone_name()`, completely ignoring the `tzinfo` parameter passed to the constructor.
+
+The fix leverages the existing `TimezoneMixin.get_tzname()` method which:
+- Returns `None` when `settings.USE_TZ` is `False`
+- Returns the current Django timezone name when `tzinfo` is `None`
+- Returns the name of the provided timezone when `tzinfo` is specified
+
+This makes `TruncDate` and `TruncTime` consistent with other truncate functions like `TruncYear`, `TruncMonth`, etc., which already work correctly with the `tzinfo` parameter.
+
+### Example Usage (now works correctly)
+
+```python
+import pytz
+from django.db.models.functions import TruncDate
+
+tz = pytz.timezone("America/New_York")
+report = (
+    TimeSlots.objects.annotate(start_date=TruncDate("start_at", tzinfo=tz))
+    .values("start_date")
+    .annotate(timeslot_count=Count("id"))
+    .values("start_date", "timeslot_count")
+)
+```
+
+The fix ensures that datetime values are properly converted to the specified timezone before being truncated to date or time, resolving the issue described in the bug report.

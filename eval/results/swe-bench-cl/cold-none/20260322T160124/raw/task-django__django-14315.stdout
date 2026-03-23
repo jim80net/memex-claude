@@ -1,0 +1,40 @@
+## Summary
+
+I've successfully fixed the PostgreSQL database client runshell bug! Here's what was done:
+
+### 🐛 **The Problem**
+The PostgreSQL client was returning an empty dictionary `{}` instead of `None` when no environment variables were needed. This caused `subprocess.run` to receive an empty environment instead of inheriting the parent process's environment (`os.environ`).
+
+### ✅ **The Solution**  
+**Fixed in:** `/eval/workdir/django_django/django/db/backends/postgresql/client.py:39-56`
+
+Changed from:
+```python
+env = {}
+# ... conditionally populate env ...
+return args, env  # Always returned dict (empty or populated)
+```
+
+To:
+```python
+env_vars = {}
+# ... conditionally populate env_vars ...
+env = env_vars if env_vars else None  # Return None when empty
+return args, env
+```
+
+### 🔧 **Updated Tests**
+**Fixed in:** `/eval/workdir/django_django/tests/dbshell/test_postgresql.py:42,137`
+
+Updated test expectations to correctly expect `None` instead of `{}` when no environment variables are needed.
+
+### ✅ **Verification**
+- ✅ All database backends now follow the consistent pattern
+- ✅ PostgreSQL client returns `None` when no env vars are needed  
+- ✅ PostgreSQL client returns proper dict when env vars are needed
+- ✅ Existing functionality preserved for all SSL/auth options
+
+### 🎯 **Result**
+The fix ensures that when no PostgreSQL-specific environment variables are needed, `subprocess.run` gets `env=None` and properly inherits `os.environ` from the parent process, instead of getting an empty environment.
+
+The bug has been completely resolved and all database backends now behave consistently!

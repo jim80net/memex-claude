@@ -1,0 +1,83 @@
+diff --git a/lib/matplotlib/colors.py b/lib/matplotlib/colors.py
+index 2d3072da04..f1025bd836 100644
+--- a/lib/matplotlib/colors.py
++++ b/lib/matplotlib/colors.py
+@@ -727,9 +727,9 @@ class Colormap:
+                 xa = xa.astype(int)
+         # Set the over-range indices before the under-range;
+         # otherwise the under-range values get converted to over-range.
+-        xa[xa > self.N - 1] = self._i_over
+-        xa[xa < 0] = self._i_under
+-        xa[mask_bad] = self._i_bad
++        xa[xa > self.N - 1] = np.array(self._i_over).astype(xa.dtype)
++        xa[xa < 0] = np.array(self._i_under).astype(xa.dtype)
++        xa[mask_bad] = np.array(self._i_bad).astype(xa.dtype)
+ 
+         lut = self._lut
+         if bytes:
+diff --git a/lib/matplotlib/tests/test_colors.py b/lib/matplotlib/tests/test_colors.py
+index ff893e71ac..b8d875969d 100644
+--- a/lib/matplotlib/tests/test_colors.py
++++ b/lib/matplotlib/tests/test_colors.py
+@@ -1585,3 +1585,61 @@ def test_cm_set_cmap_error():
+     bad_cmap = 'AardvarksAreAwkward'
+     with pytest.raises(ValueError, match=bad_cmap):
+         sm.set_cmap(bad_cmap)
++
++
++def test_colormap_uint8_no_warnings():
++    """
++    Test that using colormaps with uint8 arrays doesn't produce NumPy
++    deprecation warnings. Regression test for NumPy 1.24 warnings.
++
++    See: GitHub issue for NumPy 1.24 deprecation warnings when calling
++    plt.get_cmap()(np.empty((0, ), dtype=np.uint8))
++    """
++    import warnings
++
++    # Test the exact scenario from the bug report
++    with warnings.catch_warnings(record=True) as w:
++        warnings.simplefilter("always", DeprecationWarning)
++
++        # This should not produce any deprecation warnings
++        cmap = plt.get_cmap()
++        result = cmap(np.empty((0,), dtype=np.uint8))
++
++        # Check that no deprecation warnings were generated
++        deprecation_warnings = [warning for warning in w
++                              if issubclass(warning.category, DeprecationWarning)]
++
++        # Filter to only NumPy warnings about out-of-bound integers
++        numpy_warnings = [warning for warning in deprecation_warnings
++                         if 'out-of-bound Python integers' in str(warning.message)]
++
++        assert len(numpy_warnings) == 0, (
++            f"Expected no NumPy deprecation warnings, but got {len(numpy_warnings)}: "
++            f"{[str(w.message) for w in numpy_warnings]}"
++        )
++
++    # Additional test with various uint8 inputs
++    with warnings.catch_warnings(record=True) as w:
++        warnings.simplefilter("always", DeprecationWarning)
++
++        # Test with actual uint8 values
++        test_arrays = [
++            np.array([0, 127, 255], dtype=np.uint8),  # normal range
++            np.array([0], dtype=np.uint8),             # single value
++            np.empty((0,), dtype=np.uint8),            # empty array (bug report case)
++        ]
++
++        for test_array in test_arrays:
++            result = cmap(test_array)
++            assert result.shape == test_array.shape + (4,), \
++                f"Unexpected result shape for input {test_array}"
++
++        # Check for any NumPy deprecation warnings
++        numpy_warnings = [warning for warning in w
++                         if (issubclass(warning.category, DeprecationWarning) and
++                             'out-of-bound Python integers' in str(warning.message))]
++
++        assert len(numpy_warnings) == 0, (
++            f"Expected no NumPy deprecation warnings, but got: "
++            f"{[str(w.message) for w in numpy_warnings]}"
++        )
