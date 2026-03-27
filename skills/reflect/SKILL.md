@@ -119,6 +119,20 @@ For each learning, decide where it belongs:
 
 When in doubt, prefer project scope. It's easy to promote later.
 
+#### Worktree awareness
+
+If the current working directory is inside a **git worktree** (check with `git rev-parse --git-common-dir` — if the output differs from `git rev-parse --git-dir`, you are in a worktree), project-scoped files (`<cwd>/.claude/rules/`, `<cwd>/.claude/skills/`) written directly will be **lost when the worktree is cleaned up**.
+
+Handle this by scope:
+
+| Scope | Worktree behavior |
+|-------|-------------------|
+| **Memories** (`~/.claude/projects/.../memory/`) | Safe — stored outside the repo. Write normally. |
+| **Project rules/skills** (`<cwd>/.claude/rules/`, `<cwd>/.claude/skills/`) | **Must be committed and PR'd.** Create a dedicated branch (e.g., `chore/reflect-learnings`), commit the new files, push, and create a PR against main. Do not mix these changes with unrelated feature work in the worktree. |
+| **Global rules/skills** (`~/.claude/rules/`, `~/.claude/skills/`) | Safe — stored outside the repo. Write normally. |
+
+If you have project-scoped learnings to persist but also have other uncommitted work in the worktree, create the rule/skill files, commit them on a **separate branch** so they reach the main repo. Never write project-scoped files directly into a worktree and leave them uncommitted — they will be silently lost.
+
 ### 5. Create the files
 
 #### For memories
