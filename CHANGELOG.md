@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/jim80net/memex-claude/compare/v1.5.0...v1.6.0) (2026-04-02)
+
+
+### Features
+
+* upgrade /handoff skill for comprehensive detail ([#42](https://github.com/jim80net/memex-claude/issues/42)) ([49db35c](https://github.com/jim80net/memex-claude/commit/49db35c5ee21f9ea3e328e846ee2fae5754586fb))
+
+
+### Bug Fixes
+
+* **reflect:** add worktree awareness to scope determination ([#40](https://github.com/jim80net/memex-claude/issues/40)) ([4d9aec0](https://github.com/jim80net/memex-claude/commit/4d9aec028ca07f28b20414bc471e2e5544068f54))
+
 ## [1.5.0](https://github.com/jim80net/memex-claude/compare/v1.4.1...v1.5.0) (2026-03-17)
 
 
