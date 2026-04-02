@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Create a continuation plan so a fresh session can pick up exactly where this one left off. Writes the plan to disk."
+description: "Create a comprehensive continuation plan so a fresh session can pick up exactly where this one left off — with full operational detail, not summaries."
 queries:
   - "hand off this work"
   - "create a handoff"
@@ -12,9 +12,11 @@ queries:
   - "write a continuation plan"
 ---
 
-# /handoff — Create a Continuation Plan
+# /handoff — Create a Comprehensive Continuation Plan
 
-Capture the full state of the current work so a completely fresh session can resume without losing context. The plan is written to disk and can be pasted or read at the start of the next session.
+Capture the **full operational state** of the current work so a completely fresh session can resume without losing any context. The next session has zero memory of this one — every detail that matters must be in the document.
+
+**Budget: Spare no necessary detail.** A handoff that's too short forces the next session to re-discover context, wasting hours. A handoff that's comprehensive saves the user from repeating themselves. Err on the side of completeness.
 
 ## When to Use
 
@@ -27,74 +29,90 @@ Capture the full state of the current work so a completely fresh session can res
 
 ### 1. Summarize the objective
 
-Write a clear, concise statement of what the user is trying to accomplish. This is the "north star" for the next session. Include enough context that someone unfamiliar could understand the goal.
+Write a clear statement of what the user is trying to accomplish, with enough context that someone unfamiliar could understand the goal. Include:
+- The high-level goal
+- Why it matters (business/technical motivation)
+- How this session fits into the larger picture
 
-### 2. Document what's been done
+### 2. Document what's been done — IN DETAIL
 
-List completed work with enough detail to avoid re-doing it:
+For each PR merged or significant piece of work:
 
-- Commits made (with hashes and one-line descriptions)
-- PRs created (with URLs and status)
-- Files created or modified
-- Key decisions made and their rationale
-- Approaches that were tried and rejected (and why — so the next session doesn't retry them)
+- **PR number, title, and what it actually changed** (not just the title — describe the mechanics)
+- **Files modified** with the specific changes and why
+- **The problem it solved** with the root cause, not just the symptom
+- **Verification**: what tests were run, what CI status was, what review found
+- **Operational impact**: what needs to happen after merge (deploy commands, service restarts, etc.)
 
-### 3. Document what's left
+For decisions made during the session:
+- **What was decided** and the specific rationale
+- **What alternatives were considered** and why they were rejected
+- **Supporting data** (benchmark numbers, cost analysis, error messages)
 
-List remaining work as concrete, actionable items. For each item:
+For investigations/research:
+- **What was checked** and the specific findings
+- **File paths and line numbers** for key code examined
+- **Conclusions** with evidence, not just assertions
 
-- What needs to happen
-- Where in the codebase it applies
-- Any known blockers or dependencies between items
-- Suggested approach if one was discussed
+### 3. Document current system state
+
+Capture the actual state of every system touched, with verification commands. **Include the actual output**, not just the commands. The next session should be able to verify state without re-running.
+
+```bash
+# Git state
+git branch --show-current
+git log --oneline -15
+git status
+git worktree list
+
+# Open PRs
+gh pr list --author @me --state open
+
+# Service health (if applicable)
+# Include actual JSON responses, not just "it's healthy"
+```
+
+### 4. Document what's left — with full context per item
+
+For each remaining item, provide:
+
+- **What needs to happen** — concrete, actionable steps (not "fix the thing")
+- **Where in the codebase** — specific file paths, function names, line numbers
+- **Why it matters** — what breaks or is blocked without it
+- **Blocked by** — dependencies on other items
+- **Suggested approach** — if one was discussed or is obvious from the session
+- **Known pitfalls** — things the next session should watch out for
+- **Verification** — how to confirm the item is done correctly
 
 Order items by priority or logical sequence.
 
-### 4. Capture current state
+### 5. Document failed approaches and dead ends
 
-Record the working state so the next session can orient immediately:
+For each approach that was tried and abandoned:
+- **What was tried** and the specific error or problem
+- **Why it failed** — root cause, not just "it didn't work"
+- **What was learned** that should prevent the next session from retrying
 
-```bash
-# Current branch and recent commits
-git branch --show-current
-git log --oneline -10
+This section prevents the most expensive waste: a fresh session re-discovering the same dead ends.
 
-# Uncommitted changes
-git status
-git diff --stat
+### 6. Capture operational knowledge and gotchas
 
-# Any worktrees
-git worktree list
-
-# Open PRs from this work
-gh pr list --author @me --state open
-```
-
-Include the output in the handoff document.
-
-### 5. Note gotchas and context
-
-Capture anything that would be lost with the context window:
-
-- Environment quirks (e.g., "bun 0.1.5 is installed but too old, use ~/.bun/bin/bun after updating")
+Everything that would be lost with the context window:
+- Environment quirks with exact workaround commands
 - Non-obvious dependencies between components
-- Things that look like bugs but aren't
-- User preferences observed during the session that aren't yet saved as memories/rules
+- Things that look like bugs but aren't (and why)
+- Service state that affects behavior (what's deployed where, what version)
+- Credentials/access patterns (not the secrets — the patterns for using them)
+- User preferences observed during the session that aren't yet saved as rules
 
-### 6. Write the handoff file
+### 7. Write the handoff file
 
-Write the plan to a uniquely named file:
-
-```
-<cwd>/.claude/handoffs/<YYYYMMDD>-<kebab-case-title>.md
-```
-
-For example: `.claude/handoffs/20260307-prebuilt-binary-support.md`
+Write to: `<cwd>/.claude/handoffs/<YYYYMMDD>-<kebab-case-title>.md`
 
 Use this structure:
 
 ```markdown
-# Handoff: <brief title>
+# Handoff: <descriptive title>
 
 **Date:** <ISO date>
 **Branch:** <current branch>
@@ -102,41 +120,89 @@ Use this structure:
 
 ## Objective
 
-<What we're trying to accomplish>
+<What we're trying to accomplish and why. 2-3 paragraphs of context.>
 
-## Completed
+## Session Summary
 
-- <done item 1>
-- <done item 2>
+<One paragraph narrative of what happened this session — the arc from start to finish.>
 
-## Remaining
+## Completed Work
 
-- [ ] <todo item 1>
-- [ ] <todo item 2>
+### <PR or work item title>
+
+**PR:** #NNN — <url>
+**Problem:** <what was broken and why>
+**Root cause:** <the actual bug/gap, with file:line references>
+**Fix:** <what was changed, mechanically>
+**Files:** <list of files changed with one-line description each>
+**Tests:** <what tests were added/run>
+**Review:** <findings and resolution>
+**Deploy:** <operational commands needed after merge>
+
+<Repeat for each significant work item>
+
+### Key Decisions
+
+| Decision | Rationale | Alternatives Rejected |
+|----------|-----------|----------------------|
+| <decision 1> | <why> | <what else was considered> |
+
+### Investigations & Research
+
+<For each research item: what was checked, findings with file:line refs, conclusion>
 
 ## Current State
 
-<git status, branch, uncommitted changes, open PRs>
+### Git
+\```
+<actual git log output>
+<actual git status output>
+\```
 
-## Key Decisions
+### Services
+\```
+<actual health check output>
+<actual registry/job/deployment state>
+\```
 
-- <decision 1 and rationale>
-- <decision 2 and rationale>
+### Deployed Versions
+- <service 1>: <git hash>, <what's running>
+- <service 2>: <git hash>, <what's running>
 
-## Gotchas
+## Remaining Work
 
-- <non-obvious thing 1>
-- <non-obvious thing 2>
+### 1. <Item title> [priority]
+
+**What:** <concrete description>
+**Where:** <file paths, function names, line numbers>
+**Why:** <what breaks without it, what it unblocks>
+**Blocked by:** <dependencies>
+**Approach:** <suggested implementation>
+**Pitfalls:** <things to watch out for>
+**Verify:** <how to confirm it's done>
+
+<Repeat for each item, ordered by priority>
+
+## Failed Approaches & Dead Ends
+
+### <What was tried>
+**Error/Problem:** <exact error message or behavior>
+**Root cause:** <why it failed>
+**Lesson:** <what to do instead>
+
+## Gotchas & Environment Notes
+
+- <gotcha 1 with exact workaround command>
+- <gotcha 2>
 
 ## To Resume
 
-<Exact instructions for the next session to get started, e.g.:>
 1. Read this file: `cat .claude/handoffs/<filename>.md`
-2. Check out branch: `git checkout <branch>`
-3. Start with: <first remaining task>
+2. <Verify state command>
+3. <First concrete action>
 ```
 
-### 7. Confirm with the user
+### 8. Confirm with the user
 
 Show the handoff document and ask:
 - Is anything missing?
@@ -145,9 +211,7 @@ Show the handoff document and ask:
 
 Update the file with any corrections.
 
-### 8. Tell the user how to take over
-
-Print the exact command or prompt to start the next session, including the full filename:
+### 9. Tell the user how to take over
 
 ```
 To continue, start a new session and say:
@@ -157,9 +221,13 @@ To continue, start a new session and say:
 
 ## Guidelines
 
-- **Be specific, not generic.** File paths, branch names, commit hashes, PR URLs — anything the next session would need to look up, include it directly.
-- **Explain the why.** Decisions without rationale will be re-evaluated from scratch. Save the next session that work.
-- **Include failed approaches.** "We tried X but it didn't work because Y" prevents the next session from going in circles.
-- **Keep it scannable.** Use headers, bullet points, and checkboxes. The next session should be able to skim the structure and dive into the relevant section.
+- **Spare no necessary detail.** The next session has zero context. Everything that matters must be written down. A long handoff that prevents hours of re-discovery is worth it.
+- **Be specific, not generic.** File paths, branch names, commit hashes, PR URLs, exact error messages, benchmark values, cost figures — anything the next session would need to look up, include directly.
+- **Explain the why.** Decisions without rationale will be re-evaluated from scratch.
+- **Include failed approaches.** The most expensive waste is a fresh session re-discovering the same dead ends.
+- **Include actual command output.** Don't say "check the service health" — run the command and include the output.
+- **Include operational commands.** Every "after merge, do X" should have the exact command, not a description.
+- **Include the data.** Tables of results, cost comparisons, benchmark numbers — these belong in the handoff, not just references to them.
+- **Keep it scannable.** Use headers, bullet points, tables, and checkboxes — but don't sacrifice detail for brevity.
 
 $ARGUMENTS
