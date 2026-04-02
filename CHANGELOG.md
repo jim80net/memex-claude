@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/jim80net/memex-claude/compare/v1.6.0...v1.7.0) (2026-04-02)
+
+
+### Features
+
+* add bundled /wrap-things-up end-of-session skill ([#43](https://github.com/jim80net/memex-claude/issues/43)) ([3a0f6a9](https://github.com/jim80net/memex-claude/commit/3a0f6a99926f72d076d5db98a1e7e3228e30e1b5))
+
 ## [1.6.0](https://github.com/jim80net/memex-claude/compare/v1.5.0...v1.6.0) (2026-04-02)
 
 
