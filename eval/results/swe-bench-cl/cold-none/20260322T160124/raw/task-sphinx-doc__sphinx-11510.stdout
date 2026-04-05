@@ -1,0 +1,35 @@
+Perfect! Our fix is working correctly. Let me summarize what we've accomplished:
+
+## Summary
+
+I've successfully fixed the Sphinx bug where the `source-read` event was not emitted for files processed by the `include` directive. Here's what was done:
+
+### **Root Cause Analysis**
+The issue was that Sphinx's `Include` directive inherited from docutils' `BaseInclude` directive, which directly reads included files without going through Sphinx's source reading mechanism that emits the `source-read` event.
+
+### **The Fix**
+Modified `/eval/workdir/sphinx-doc_sphinx/sphinx/directives/other.py` to:
+
+1. **Read included files explicitly** before calling the parent implementation
+2. **Emit source-read events** for each included file using `env.events.emit('source-read', rel_filename, arg)`
+3. **Handle content modifications** by writing modified content to a temporary file when the source-read event handlers modify the content
+4. **Preserve original behavior** when content is unchanged
+
+### **Key Changes**
+The Include directive now:
+- Reads the included file content
+- Emits a `source-read` event with the relative filename as the docname
+- If the content was modified by event handlers, creates a temporary file with the modified content
+- Processes the (potentially modified) content through the normal include mechanism
+- Cleans up temporary files automatically
+
+### **Verification**
+Created and ran tests that confirm:
+- ✅ `source-read` events are now emitted for included files  
+- ✅ Event handlers can modify included content successfully
+- ✅ The fix doesn't break existing functionality
+
+### **Impact**
+This fix resolves the original bug where extensions using the `source-read` event (like the Yocto documentation's variable replacement extension) couldn't modify content in included files. Now all RST content goes through the same event system regardless of whether it's in the main document or included files.
+
+The fix is minimal, focused, and maintains backward compatibility while resolving the core issue described in the bug report.

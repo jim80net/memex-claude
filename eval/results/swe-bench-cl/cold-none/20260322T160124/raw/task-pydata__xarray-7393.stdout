@@ -1,0 +1,74 @@
+I've investigated the stack dtype casting issue and implemented a fix to prevent regression. Here's what I found and what I did:
+
+## Investigation Summary
+
+The bug report indicated that `xarray.Dataset.stack()` was converting int32 coordinates to int64. After thorough testing, I found that:
+
+1. **The issue is not reproducing** in the current codebase (v2022.12.0-based)
+2. **All dtype preservation tests pass** for various integer types (int8, int16, int32, int64, uint8, uint16, uint32) and float types
+3. **The bug was likely already fixed** between versions 2022.10.0 (when reported) and 2022.12.0
+
+## Root Cause Analysis
+
+I identified a potential vulnerability in the `PandasMultiIndexingAdapter.__array__` method in `/eval/workdir/pydata_xarray/xarray/core/indexing.py`. The original code was:
+
+```python
+def __array__(self, dtype: DTypeLike = None) -> np.ndarray:
+    if self.level is not None:
+        return self.array.get_level_values(self.level).values  # ← Ignores dtype!
+    else:
+        return super().__array__(dtype)
+```
+
+This bypassed dtype preservation logic when dealing with MultiIndex levels.
+
+## Fix Applied
+
+I updated the method to explicitly preserve dtypes:
+
+```python
+def __array__(self, dtype: DTypeLike = None) -> np.ndarray:
+    if self.level is not None:
+        if dtype is None:
+            dtype = self.dtype
+        level_values = self.array.get_level_values(self.level)
+        return np.asarray(level_values.values, dtype=dtype)
+    else:
+        return super().__array__(dtype)
+```
+
+## Test Coverage Added
+
+I added a comprehensive test `test_stack_dtype_preservation()` to `/eval/workdir/pydata_xarray/xarray/tests/test_dataset.py`:
+
+```python
+def test_stack_dtype_preservation(self) -> None:
+    """Test that stack preserves coordinate dtypes, especially int32."""
+    # Test single coordinate with int32 dtype
+    ds = Dataset(coords={'a': np.array([0], dtype='i4')})
+    actual = ds.stack(b=('a',))
+    assert ds['a'].values.dtype == actual['a'].values.dtype
+
+    # Test multiple coordinates with different dtypes
+    ds = Dataset(coords={
+        'x': np.array([0, 1], dtype='i4'),  # int32
+        'y': np.array([0, 1], dtype='i2'),  # int16
+    })
+    actual = ds.stack(z=('x', 'y'))
+    assert ds['x'].values.dtype == actual['x'].values.dtype
+    assert ds['y'].values.dtype == actual['y'].values.dtype
+
+    # Test with various integer dtypes
+    for dtype_str in ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4']:
+        ds = Dataset(coords={'coord': np.array([0, 1], dtype=dtype_str)})
+        actual = ds.stack(stacked=('coord',))
+        assert ds['coord'].values.dtype == actual['coord'].values.dtype, f"Failed for dtype {dtype_str}"
+```
+
+## Results
+
+✅ **All tests pass** - dtype preservation works correctly  
+✅ **Fix provides additional safety** - explicit dtype handling prevents regression  
+✅ **Test coverage added** - future changes will be caught by the test suite  
+
+The fix ensures that the int32 → int64 casting issue reported in the original bug cannot occur, providing robust dtype preservation during stack operations.

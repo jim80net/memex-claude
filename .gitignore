@@ -15,3 +15,7 @@ bin/*.dll
 bin/.install-*
 bin/.install.log
 bin/.installing.lock
+.gitnexus
+
+eval/data/
+# eval/results/ is tracked — pilot results are checked in for PR review

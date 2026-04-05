@@ -1,0 +1,36 @@
+## Investigation Summary
+
+I investigated the reported MRT (CDS format) units parsing bug and found that **the issue has been resolved in newer versions of astropy**. Here's what I discovered:
+
+### The Bug (astropy 5.2.1)
+- `10+3J/m/s/kpc2` was incorrectly parsed as `1e+3 J s / (kpc2 m)` 
+- `10-7J/s/kpc2` was incorrectly parsed as `1e-7 J kpc2 / s`
+
+### Current Status (astropy 7.2.0)  
+- `10+3J/m/s/kpc2` correctly parses as `1000 J / (m s kpc2)` ✅
+- `10-7J/s/kpc2` correctly parses as `1e-07 J / (s kpc2)` ✅
+
+### Changes Made
+
+I added comprehensive regression tests to prevent this bug from reappearing:
+
+1. **`astropy/units/tests/test_format.py:92-95`** - Added test cases for the problematic composite units to the existing CDS grammar test suite
+
+2. **`astropy/io/ascii/tests/test_cds.py:558-610`** - Added a complete test function that verifies MRT file reading works correctly with composite units, including checks for:
+   - Correct unit scales (1000.0 and 1e-7)  
+   - Proper bases and powers assignment
+   - String representation validation
+   - Explicit checks that buggy formats don't appear
+
+### Verification
+
+I created and ran comprehensive tests that confirm:
+- Direct unit parsing works correctly: `Unit("10+3J/m/s/kpc2", format="cds")`
+- MRT file reading via `ascii.read()` works correctly
+- All division terms properly end up in the denominator as expected
+
+### Recommendation
+
+Users experiencing this issue should **upgrade to a newer version of astropy**. The bug appears to have been fixed sometime between version 5.2.1 (2022) and the current version 7.2.0.
+
+The regression tests I added will help ensure this parsing issue doesn't reoccur in future releases.

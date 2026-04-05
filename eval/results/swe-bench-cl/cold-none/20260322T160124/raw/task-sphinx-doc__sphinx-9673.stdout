@@ -1,0 +1,42 @@
+## Bug Analysis and Fix Summary
+
+I've successfully identified and fixed the bug with `autodoc_typehints_description_target = "documented"` not working with Napoleon.
+
+### Root Cause
+The issue was in `sphinx/ext/autodoc/typehints.py:152-153`. The `augment_descriptions_with_types` function only checked for `:return:` fields but **Napoleon generates `:returns:` fields** (note the 's'), not `:return:` fields.
+
+**Before (broken):**
+```python
+elif parts[0] == 'return':
+    has_description.add('return')
+```
+
+**After (fixed):**
+```python
+elif parts[0] in ('return', 'returns'):
+    has_description.add('return')
+```
+
+### What This Means
+- **Traditional Sphinx field lists**: Use `:return:` 
+- **Napoleon-generated field lists**: Use `:returns:`
+- **The typehints code**: Only looked for `:return:`, missing Napoleon's `:returns:`
+
+When `autodoc_typehints_description_target = "documented"` is set, Sphinx should only add type information for parameters and returns that already have descriptions. But because it couldn't find Napoleon's `:returns:` fields, it never added the return type information.
+
+### The Fix
+The fix now correctly recognizes both field formats:
+- `:return:` (traditional Sphinx)
+- `:returns:` (Napoleon-generated)
+
+Both are mapped to the same internal key (`'return'`) so the rest of the typehints logic works unchanged.
+
+### Verification
+I created and ran a verification test that confirms the fix correctly handles:
+- ✅ Traditional `:return:` fields 
+- ✅ Napoleon `:returns:` fields
+- ✅ Cases with no return documentation
+
+This fix resolves the reported issue where return types were missing from documentation when using Napoleon with `autodoc_typehints_description_target = "documented"`.
+
+The fix is minimal, safe, and maintains backward compatibility while extending support for Napoleon-style docstrings.

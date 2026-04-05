@@ -1,0 +1,78 @@
+## Summary
+
+I've identified and fixed the bug in Astropy's `separability_matrix` function for nested compound models. Here's what I found and did:
+
+### The Problem
+
+The issue was in the `_cstack` function in `/eval/workdir/astropy_astropy/astropy/modeling/separable.py` at line 245. When handling nested compound models like:
+
+```python
+cm = m.Linear1D(10) & m.Linear1D(5)
+nested_model = m.Pix2Sky_TAN() & cm
+```
+
+The separability matrix incorrectly showed dependencies between the independent Linear1D outputs.
+
+### Root Cause
+
+In the `_cstack` function (lines 241-245), when the right operand was already a matrix (from a previous compound model operation), the code was:
+
+```python
+else:
+    cright = np.zeros((noutp, right.shape[1]))
+    cright[-right.shape[0]:, -right.shape[1]:] = 1  # BUG: unconditionally sets all to 1
+```
+
+This was inconsistent with how the left operand was handled (lines 238-240):
+```python
+else:
+    cleft = np.zeros((noutp, left.shape[1]))
+    cleft[: left.shape[0], : left.shape[1]] = left  # Correctly preserves matrix values
+```
+
+### The Fix
+
+**File: `astropy/modeling/separable.py:245`**
+
+```python
+# Before (buggy)
+cright[-right.shape[0]:, -right.shape[1]:] = 1
+
+# After (fixed)  
+cright[-right.shape[0]:, -right.shape[1]:] = right
+```
+
+This change ensures that the actual separability structure from nested compound models is preserved rather than being overwritten with all 1s.
+
+### Tests Added
+
+I added comprehensive test cases in `astropy/modeling/tests/test_separable.py`:
+
+1. `test_nested_compound_model_separability()` - Tests the specific reported case
+2. `test_multiple_nested_compound_models()` - Tests deeply nested scenarios
+
+### Expected Behavior After Fix
+
+```python
+from astropy.modeling import models as m
+from astropy.modeling.separable import separability_matrix
+
+# These should now produce identical results:
+cm = m.Linear1D(10) & m.Linear1D(5)
+flat_model = m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)
+nested_model = m.Pix2Sky_TAN() & cm
+
+# Both should return the same separability matrix:
+# array([[ True,  True, False, False],
+#        [ True,  True, False, False], 
+#        [False, False,  True, False],
+#        [False, False, False,  True]])
+```
+
+### Files Changed
+
+1. **`astropy/modeling/separable.py`** - Fixed the core bug in `_cstack` function
+2. **`astropy/modeling/tests/test_separable.py`** - Added test cases to prevent regression  
+3. **`docs/changes/modeling/fix-nested-separability.bugfix.rst`** - Changelog entry
+
+This fix ensures that the separability analysis is consistent regardless of how compound models are nested, making the modeling framework more reliable for complex astronomical coordinate transformations.

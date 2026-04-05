@@ -1,0 +1,45 @@
+Perfect! I've successfully fixed the `UnrecognizedUnit` equality comparison with `None` issue. Here's a summary of what was implemented:
+
+## Problem
+When comparing an `UnrecognizedUnit` with `None`, a `TypeError` was raised instead of returning `False`:
+```python
+x = u.Unit('asdf', parse_strict='silent')
+x == None  # Raised TypeError: "None is not a valid Unit"
+```
+
+## Solution
+I modified the `UnrecognizedUnit.__eq__` method in `/eval/workdir/astropy_astropy/astropy/units/core.py` at lines 1712-1717 to handle exceptions gracefully:
+
+**Before:**
+```python
+def __eq__(self, other):
+    other = Unit(other, parse_strict='silent')
+    return isinstance(other, UnrecognizedUnit) and self.name == other.name
+```
+
+**After:**
+```python
+def __eq__(self, other):
+    try:
+        other = Unit(other, parse_strict='silent')
+    except (ValueError, UnitsError, TypeError):
+        return False
+    return isinstance(other, UnrecognizedUnit) and self.name == other.name
+```
+
+## Changes Made
+
+1. **Fixed the bug**: Added proper exception handling that catches `TypeError` when `Unit()` constructor is called with `None` or other invalid objects.
+
+2. **Added test coverage**: Enhanced the existing `test_unknown_unit3()` function in `/eval/workdir/astropy_astropy/astropy/units/tests/test_units.py` with test cases for `None` comparison:
+   ```python
+   # Test that comparing with None returns False (not TypeError)
+   assert unit != None
+   assert not (unit == None)
+   ```
+
+## Implementation Details
+
+The fix follows the same pattern used in the base `Unit.__eq__` method (lines 724-731), which already properly handles these exceptions. This ensures consistency across the codebase and maintains expected Python behavior where comparison with `None` should return `False`, not raise an exception.
+
+The fix resolves the issue while maintaining backward compatibility and following Python's data model conventions for equality comparisons.

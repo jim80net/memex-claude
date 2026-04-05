@@ -1,0 +1,49 @@
+## ✅ Bug Fix Complete: Subfigures `wspace`/`hspace` Now Working
+
+I've successfully identified and fixed the bug where `wspace` and `hspace` parameters in `Figure.subfigures()` were being ignored.
+
+### 🐛 **The Problem**
+The `subfigures` method was creating a `GridSpec` with the correct spacing parameters, but the `SubFigure` class wasn't using them. Instead, it calculated positions directly from width/height ratios, completely bypassing the spacing.
+
+### 🔧 **The Fix**
+**File:** `lib/matplotlib/figure.py:2276-2287`
+
+**Before:** Direct calculation ignoring spacing
+```python
+gs = self._subplotspec.get_gridspec()
+wr = np.asarray(gs.get_width_ratios())
+hr = np.asarray(gs.get_height_ratios())
+dx = wr[self._subplotspec.colspan].sum() / wr.sum()
+dy = hr[self._subplotspec.rowspan].sum() / hr.sum()
+x0 = wr[:self._subplotspec.colspan.start].sum() / wr.sum()
+y0 = 1 - hr[:self._subplotspec.rowspan.stop].sum() / hr.sum()
+```
+
+**After:** Using proper GridSpec positioning with spacing
+```python
+# Use the subplotspec's get_position method to properly handle spacing
+position_bbox = self._subplotspec.get_position(self._parent.figure)
+x0, y0 = position_bbox.x0, position_bbox.y0
+dx, dy = position_bbox.width, position_bbox.height
+```
+
+### 🎯 **Result**
+Now this code works as expected:
+```python
+import matplotlib.pyplot as plt
+
+# These will now show DIFFERENT spacing
+figs_tight = plt.figure().subfigures(2, 2, wspace=0, hspace=0)     # No gaps
+figs_spaced = plt.figure().subfigures(2, 2, wspace=1, hspace=1)    # Large gaps
+
+for fig in figs_tight.flat:
+    fig.subplots().plot([1, 2])
+plt.show()
+```
+
+### 📋 **Testing Created**
+- **Reproduction tests:** Demonstrated the original bug
+- **Verification tests:** Confirmed the fix works correctly  
+- **Visual tests:** Created comparison plots showing the difference
+
+The fix ensures subfigures now behave consistently with regular subplots when it comes to spacing parameters, resolving the issue described in the bug report.

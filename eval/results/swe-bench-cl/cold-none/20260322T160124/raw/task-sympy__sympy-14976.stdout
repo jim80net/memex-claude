@@ -1,0 +1,69 @@
+## Summary
+
+I've successfully fixed the `lambdify(modules='mpmath')` rational precision issue. Here's what I did:
+
+### The Problem
+When using `lambdify` with `modules='mpmath'`, rational numbers like `232/3` were not being properly wrapped for mpmath, resulting in:
+```python
+def _lambdifygenerated(x):
+    return RisingFactorial(18, x) - 232/3  # Plain Python division, loses precision
+```
+
+This caused reduced precision in `nsolve` and other high-precision calculations because `232/3` was evaluated as regular Python float division rather than maintaining exact rational arithmetic.
+
+### The Solution
+I added a `_print_Rational` method to the `MpmathPrinter` class in `/eval/workdir/sympy_sympy/sympy/printing/pycode.py`:
+
+```python
+def _print_Rational(self, e):
+    # Handle rational numbers to maintain precision in mpmath
+    # Convert both numerator and denominator to mpmath.mpf using string representation
+    # to avoid precision loss that would occur with regular Python division
+    if e.q == 1:
+        # For integers, just return the mpf representation
+        return '{func}({p})'.format(
+            func=self._module_format('mpmath.mpf'),
+            p=repr(str(e.p))
+        )
+    else:
+        # For rationals, use mpmath.mpf for both numerator and denominator
+        return '({numer}/{denom})'.format(
+            numer='{func}({p})'.format(
+                func=self._module_format('mpmath.mpf'),
+                p=repr(str(e.p))
+            ),
+            denom='{func}({q})'.format(
+                func=self._module_format('mpmath.mpf'),
+                q=repr(str(e.q))
+            )
+        )
+```
+
+### What This Fixes
+Now `lambdify` with `modules='mpmath'` generates:
+```python
+def _lambdifygenerated(x):
+    return RisingFactorial(18, x) - (mpmath.mpf('232')/mpmath.mpf('3'))
+```
+
+The rational `232/3` is now properly wrapped with `mpmath.mpf()` calls, maintaining full precision.
+
+### Testing
+I also added a comprehensive test case in `/eval/workdir/sympy_sympy/sympy/utilities/tests/test_lambdify.py`:
+
+```python
+@conserve_mpmath_dps
+def test_mpmath_rational_precision():
+    """Test that rational numbers are properly wrapped for mpmath to maintain precision."""
+    # Tests both simple rationals and the original issue case
+    # Verifies that generated source contains mpmath.mpf
+    # Confirms high-precision results match expectations
+```
+
+### Key Benefits
+1. **Maintains Precision**: Rational numbers now preserve exact arithmetic in mpmath
+2. **Backwards Compatible**: No changes to existing API or behavior for other modules
+3. **Handles Edge Cases**: Works correctly for integers, negative numbers, and large numbers
+4. **Follows Patterns**: Consistent with how `_print_Float` handles precision for mpmath
+
+The fix ensures that `nsolve` and other precision-critical functions get the full mpmath precision they expect when working with expressions containing rational numbers.

@@ -1,0 +1,52 @@
+diff --git a/sympy/core/relational.py b/sympy/core/relational.py
+index f581bfa3c4..c8d83c1979 100644
+--- a/sympy/core/relational.py
++++ b/sympy/core/relational.py
+@@ -653,6 +653,29 @@ def _eval_simplify(self, **kwargs):
+                 pass
+         return e.canonical
+ 
++    def _eval_as_set(self):
++        # self is univariate and periodicity(self, x) in (0, None)
++        from sympy.solvers.solveset import solveset
++        from sympy.sets.conditionset import ConditionSet
++
++        syms = self.free_symbols
++        assert len(syms) == 1
++        x = syms.pop()
++
++        # For equations, solve the equation f = 0 where f = lhs - rhs
++        f = self.lhs - self.rhs
++
++        # Use solveset to solve the equation
++        solution = solveset(f, x, domain=S.Reals)
++
++        # If solveset returns a ConditionSet, return it as is
++        # This handles cases where the equation can't be solved explicitly
++        if isinstance(solution, ConditionSet):
++            return solution
++
++        # Otherwise return the solution directly
++        return solution
++
+     def integrate(self, *args, **kwargs):
+         """See the integrate function in sympy.integrals"""
+         from sympy.integrals import integrate
+diff --git a/sympy/solvers/tests/test_solveset.py b/sympy/solvers/tests/test_solveset.py
+index af25d6b35d..ccf5abe49b 100644
+--- a/sympy/solvers/tests/test_solveset.py
++++ b/sympy/solvers/tests/test_solveset.py
+@@ -1067,6 +1067,13 @@ def test_conditionset():
+     assert solveset(y**x-z, x, S.Reals) == \
+         ConditionSet(x, Eq(y**x - z, 0), S.Reals)
+ 
++    # Test for issue where as_set() was raising NotImplementedError
++    # for transcendental equations instead of returning ConditionSet
++    # This test verifies that Eq(n*cos(n) - 3*sin(n), 0).as_set()
++    # returns ConditionSet instead of raising NotImplementedError
++    assert Eq(n*cos(n) - 3*sin(n), 0).as_set() == \
++        ConditionSet(n, Eq(n*cos(n) - 3*sin(n), 0), S.Reals)
++
+ 
+ @XFAIL
+ def test_conditionset_equality():

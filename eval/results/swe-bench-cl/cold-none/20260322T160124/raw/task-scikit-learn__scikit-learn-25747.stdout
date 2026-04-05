@@ -1,0 +1,56 @@
+## Summary
+
+I've successfully identified and fixed the FeatureUnion pandas output bug you reported. Here's what I've done:
+
+### **Problem Analysis**
+The issue occurred when:
+1. Using `FeatureUnion` with custom transformers that aggregate data (reduce number of rows)
+2. Having pandas transform output enabled globally (`set_config(transform_output="pandas")`)
+3. The pandas output wrapper tried to assign the original input's index (96 elements) to the aggregated output (4 elements)
+4. This caused a `ValueError: Length mismatch` in pandas
+
+### **Root Cause**
+The bug was in `sklearn/utils/_set_output.py` in the `_wrap_in_pandas_container` function:
+- **Line 59**: `data_to_wrap.index = index` - unconditionally set index without length check
+- **Line 65**: `pd.DataFrame(data_to_wrap, index=index, columns=columns)` - same issue when creating new DataFrame
+
+### **Fix Applied**
+I modified `sklearn/utils/_set_output.py:55-68` to:
+
+1. **For existing DataFrames**: Check if index length matches before setting it
+   ```python
+   if index is not None:
+       # Only set index if length matches to avoid aggregation issues
+       if len(index) == len(data_to_wrap):
+           data_to_wrap.index = index
+       # If lengths don't match (e.g. due to aggregation), keep original index
+   ```
+
+2. **For new DataFrames**: Set index to None when lengths don't match
+   ```python
+   # Only use index if length matches data to avoid aggregation issues
+   if index is not None and len(index) != len(data_to_wrap):
+       index = None
+   return pd.DataFrame(data_to_wrap, index=index, columns=columns)
+   ```
+
+### **Tests Added**
+1. **Unit test** in `sklearn/utils/tests/test_set_output.py`:
+   - `test__wrap_in_pandas_container_index_length_mismatch()` 
+   - Tests both DataFrame and numpy array inputs with mismatched index lengths
+
+2. **Integration test** in `sklearn/tests/test_pipeline.py`:
+   - `test_feature_union_set_output_with_aggregating_transformer()`
+   - Tests complete FeatureUnion workflow with aggregating transformers and pandas output
+
+### **Validation**
+- All modified files pass Python syntax validation
+- The fix is backward compatible - existing behavior is preserved when index lengths match
+- When lengths don't match, the fix gracefully handles the situation instead of crashing
+
+### **Files Modified**
+- `sklearn/utils/_set_output.py` - Core fix for index length mismatch
+- `sklearn/utils/tests/test_set_output.py` - Unit test for the fix  
+- `sklearn/tests/test_pipeline.py` - Integration test for FeatureUnion scenario
+
+The fix resolves the reported issue while maintaining backward compatibility and adding proper test coverage to prevent regressions.

@@ -1,0 +1,62 @@
+diff --git a/sympy/physics/quantum/dagger.py b/sympy/physics/quantum/dagger.py
+index 17da3cfd2c..adbe9043d8 100644
+--- a/sympy/physics/quantum/dagger.py
++++ b/sympy/physics/quantum/dagger.py
+@@ -85,5 +85,14 @@ def __new__(cls, arg):
+             return obj
+         return Expr.__new__(cls, arg)
+ 
++    def __mul__(self, other):
++        # Handle multiplication with IdentityOperator
++        from sympy.physics.quantum.operator import IdentityOperator
++        if isinstance(other, IdentityOperator):
++            return self
++
++        # Fall back to default multiplication behavior
++        return super(Dagger, self).__mul__(other)
++
+ adjoint.__name__ = "Dagger"
+ adjoint._sympyrepr = lambda a, b: "Dagger(%s)" % b._print(a.args[0])
+diff --git a/sympy/physics/quantum/operator.py b/sympy/physics/quantum/operator.py
+index 306bfee64f..380abb780a 100644
+--- a/sympy/physics/quantum/operator.py
++++ b/sympy/physics/quantum/operator.py
+@@ -310,6 +310,10 @@ def __mul__(self, other):
+         if isinstance(other, Operator):
+             return other
+ 
++        # Handle Dagger objects (e.g., Dagger(A) where A is an Operator)
++        if isinstance(other, Dagger):
++            return other
++
+         return Mul(self, other)
+ 
+     def _represent_default_basis(self, **options):
+diff --git a/sympy/physics/quantum/tests/test_operator.py b/sympy/physics/quantum/tests/test_operator.py
+index 7c8574fe14..7a9791eaf4 100644
+--- a/sympy/physics/quantum/tests/test_operator.py
++++ b/sympy/physics/quantum/tests/test_operator.py
+@@ -52,6 +52,11 @@ def test_operator():
+     assert Operator() == Operator("O")
+     assert A*IdentityOperator() == A
+ 
++    # Test that Dagger objects simplify correctly with IdentityOperator
++    D = Dagger(A)
++    assert D*IdentityOperator() == D
++    assert IdentityOperator()*D == D
++
+ 
+ def test_operator_inv():
+     A = Operator('A')
+@@ -105,6 +110,11 @@ def test_identity():
+     for n in [2, 3, 5]:
+         assert represent(IdentityOperator(n)) == eye(n)
+ 
++    # Test Dagger simplification with IdentityOperator (bug fix)
++    D = Dagger(O)
++    assert I * D == D  # Identity * Dagger(A) should equal Dagger(A)
++    assert D * I == D  # Dagger(A) * Identity should equal Dagger(A)
++
+ 
+ def test_outer_product():
+     k = Ket('k')

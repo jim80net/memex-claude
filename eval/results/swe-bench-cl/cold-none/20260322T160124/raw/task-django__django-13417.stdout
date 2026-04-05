@@ -1,0 +1,35 @@
+I have successfully identified and fixed the QuerySet.ordered property bug for GROUP BY queries on models with Meta.ordering.
+
+## Summary
+
+**Problem:** 
+The `QuerySet.ordered` property incorrectly returned `True` for queries that create GROUP BY clauses (like annotations) on models with `Meta.ordering`, even though Django's SQL compiler removes the default ordering when GROUP BY is present.
+
+**Root Cause:**
+- In Django's SQL compiler (`django/db/models/sql/compiler.py` lines 590-591), when there's a GROUP BY clause and the ordering comes from Meta.ordering (`self._meta_ordering`), Django sets `order_by = None` to remove the ordering from the final SQL.
+- However, the `QuerySet.ordered` property didn't account for this behavior and only checked if default ordering was defined, not if it would actually be used in the SQL.
+
+**Solution:**
+I modified the `ordered` property in `/eval/workdir/django_django/django/db/models/query.py` (lines 1225-1235) to add a check for `self.query.group_by` when evaluating default ordering:
+
+```python
+elif self.query.default_ordering and self.query.get_meta().ordering:
+    # When there's a GROUP BY clause and only default ordering,
+    # Django removes the default ordering from the SQL, so the
+    # QuerySet is effectively not ordered.
+    if self.query.group_by:
+        return False
+    return True
+```
+
+**Key Changes:**
+1. **Fixed the bug:** `QuerySet.ordered` now returns `False` for GROUP BY queries with only default ordering
+2. **Maintained compatibility:** Explicit ordering (`order_by()`, `extra_order_by`) still takes precedence
+3. **Added test case:** Created `test_annotated_ordering_with_meta_ordering` to verify the fix
+
+**Testing:**
+- Created comprehensive test cases that verify the fix works correctly
+- Ensured backward compatibility for all existing functionality
+- Verified that explicit ordering still works as expected with GROUP BY
+
+The fix now makes the `QuerySet.ordered` property accurately reflect whether the final SQL query will actually contain an ORDER BY clause, aligning it with Django's internal SQL generation behavior.

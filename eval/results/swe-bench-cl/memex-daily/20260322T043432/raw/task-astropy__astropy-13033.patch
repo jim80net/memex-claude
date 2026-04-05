@@ -1,0 +1,90 @@
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f87..1f327d9399 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -75,10 +75,23 @@ class BaseTimeSeries(QTable):
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+-
+-                raise ValueError("{} object is invalid - expected '{}' "
+-                                 "as the first column{} but found '{}'"
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++                # Check if the issue is missing required columns or wrong column order/names
++                missing_columns = [col for col in required_columns if col not in self.colnames]
++
++                if missing_columns:
++                    # Some required columns are missing
++                    missing_str = "', '".join(missing_columns)
++                    if len(missing_columns) == 1:
++                        raise ValueError("{} object is invalid - required column '{}' is missing"
++                                         .format(self.__class__.__name__, missing_str))
++                    else:
++                        raise ValueError("{} object is invalid - required columns '{}' are missing"
++                                         .format(self.__class__.__name__, missing_str))
++                else:
++                    # Columns are present but in wrong order
++                    raise ValueError("{} object is invalid - expected '{}' "
++                                     "as the first column but found '{}'"
++                                     .format(self.__class__.__name__, required_columns[0], self.colnames[0]))
+ 
+             if (self._required_columns_relax
+                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
+index bcc06d929e..75361c049f 100644
+--- a/astropy/timeseries/tests/test_sampled.py
++++ b/astropy/timeseries/tests/test_sampled.py
+@@ -382,13 +382,11 @@ def test_required_columns():
+ 
+     with pytest.raises(ValueError) as exc:
+         ts.copy().remove_column('time')
+-    assert exc.value.args[0] == ("TimeSeries object is invalid - expected "
+-                                 "'time' as the first column but found 'a'")
++    assert exc.value.args[0] == ("TimeSeries object is invalid - required column 'time' is missing")
+ 
+     with pytest.raises(ValueError) as exc:
+         ts.copy().remove_columns(['time', 'a'])
+-    assert exc.value.args[0] == ("TimeSeries object is invalid - expected "
+-                                 "'time' as the first column but found 'b'")
++    assert exc.value.args[0] == ("TimeSeries object is invalid - required column 'time' is missing")
+ 
+     with pytest.raises(ValueError) as exc:
+         ts.copy().rename_column('time', 'banana')
+@@ -396,6 +394,37 @@ def test_required_columns():
+                                  "'time' as the first column but found 'banana'")
+ 
+ 
++def test_required_columns_missing_specific():
++    """
++    Test the specific issue from the bug report - misleading exception when
++    required columns are missing after removal.
++
++    This reproduces the scenario where a user sets additional required columns
++    and then tries to remove them, expecting a clear error message about
++    missing required columns rather than a confusing message about column order.
++    """
++    # Reproduce the user's scenario from the bug report
++    ts = TimeSeries(time=INPUT_TIME,
++                    data={'flux': [99.9, 99.8, 99.7]})
++
++    # Set both time and flux as required columns (simulates user's code)
++    ts._required_columns = ["time", "flux"]
++
++    # Test removing one required column - should show clear "missing" message
++    with pytest.raises(ValueError) as exc:
++        ts.remove_column("flux")
++    assert exc.value.args[0] == ("TimeSeries object is invalid - required column 'flux' is missing")
++
++    # Test removing multiple required columns
++    ts2 = TimeSeries(time=INPUT_TIME,
++                     data={'flux': [99.9, 99.8, 99.7], 'temp': [1.0, 2.0, 3.0]})
++    ts2._required_columns = ["time", "flux", "temp"]
++
++    with pytest.raises(ValueError) as exc:
++        ts2.remove_columns(["flux", "temp"])
++    assert exc.value.args[0] == ("TimeSeries object is invalid - required columns 'flux', 'temp' are missing")
++
++
+ @pytest.mark.parametrize('cls', [BoxLeastSquares, LombScargle])
+ def test_periodogram(cls):
+ 

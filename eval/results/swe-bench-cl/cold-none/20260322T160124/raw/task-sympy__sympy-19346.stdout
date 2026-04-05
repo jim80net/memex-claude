@@ -1,0 +1,53 @@
+## Summary
+
+I've successfully identified and fixed the issue with `srepr` not properly printing dict and set elements in their symbolic form. Here's what was done:
+
+### Problem Analysis
+The issue was that `ReprPrinter` class in `/eval/workdir/sympy_sympy/sympy/printing/repr.py` had methods for handling lists (`_print_list`) and tuples (`_print_tuple`), but was missing corresponding methods for dictionaries and sets. This caused `srepr` to fall back to the default string representation instead of recursively applying symbolic representation to the elements.
+
+### Solution Implemented
+
+**1. Added `_print_dict` method (sympy/printing/repr.py:308-312):**
+```python
+def _print_dict(self, expr):
+    items = []
+    for key, value in expr.items():
+        items.append("%s: %s" % (self._print(key), self._print(value)))
+    return "{%s}" % ", ".join(items)
+```
+
+**2. Added `_print_set` method (sympy/printing/repr.py:314-315):**
+```python
+def _print_set(self, expr):
+    return "{%s}" % self.reprify(expr, ", ")
+```
+
+**3. Added comprehensive tests (sympy/printing/tests/test_repr.py):**
+- Tests for dictionaries with various key-value combinations
+- Tests for sets (accounting for unordered nature)
+- Verification that `eval(srepr(expr)) == expr` holds
+
+### Expected Behavior After Fix
+
+**Before the fix:**
+```python
+>>> srepr({x: y})
+{x: y}
+>>> srepr({x, y})
+{x, y}
+```
+
+**After the fix:**
+```python
+>>> srepr({x: y})
+{Symbol('x'): Symbol('y')}
+>>> srepr({x, y})
+{Symbol('x'), Symbol('y')}
+```
+
+The fix ensures that `srepr` now consistently applies symbolic representation to all container types (lists, tuples, dicts, and sets), making the behavior uniform and correct.
+
+### Test Script
+I've also created `test_srepr_fix.py` that can be used to verify the fix works correctly once the environment has the required dependencies (mpmath) installed.
+
+This was indeed a straightforward fix as you suspected - just two missing methods in the `ReprPrinter` class!

@@ -1,0 +1,38 @@
+Perfect! 🎉 
+
+## Summary
+
+I successfully implemented and tested the fix for issue #15493. Here's what was accomplished:
+
+### ✅ **Changes Made**
+
+1. **Modified `sympy/core/mod.py`** (lines 126-139):
+   - Added logic to apply modulo distribution to multiplication terms
+   - Added safety check to ensure all variables are integers before simplification  
+   - Added necessary Symbol import
+
+2. **Added test case to `sympy/core/tests/test_arit.py`** (line 1627):
+   - Added `assert Mod(3*i, 2) == Mod(i, 2)` test
+
+### ✅ **Fix Results**
+
+- **Target case**: `Mod(3*i, 2)` now correctly simplifies to `Mod(i, 2)` ✅
+- **Safety**: `Mod(3*x, 2)` stays unchanged when x is not known to be integer ✅  
+- **Compatibility**: All existing tests and functionality preserved ✅
+- **Mathematical rigor**: Only applies simplification when mathematically valid ✅
+
+### ✅ **Before/After Behavior**
+
+**Before:**
+```python
+>>> Mod(3*i, 2)  # where i is integer
+Mod(3*i, 2)      # unchanged
+```
+
+**After:** 
+```python
+>>> Mod(3*i, 2)  # where i is integer  
+Mod(i, 2)        # correctly simplified
+```
+
+The fix addresses the exact issue you described while maintaining backward compatibility and ensuring mathematical correctness by only applying the simplification when all variables have integer assumptions.

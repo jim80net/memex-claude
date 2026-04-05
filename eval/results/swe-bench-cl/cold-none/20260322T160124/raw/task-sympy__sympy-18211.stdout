@@ -1,0 +1,76 @@
+## Summary
+
+I have successfully fixed the issue where `solveset` was raising `NotImplementedError` instead of returning `ConditionSet` for transcendental equations that cannot be solved explicitly.
+
+## Root Cause Analysis
+
+The problem was in the call chain:
+1. `Eq(n*cos(n) - 3*sin(n), 0).as_set()` called `Boolean.as_set()`
+2. Which called `Relational._eval_as_set()`
+3. Which called `solve_univariate_inequality()` for both equations and inequalities
+4. `solve_univariate_inequality()` called `solvify()` 
+5. `solvify()` raised `NotImplementedError` when `solveset()` returned a `ConditionSet`
+
+## The Fix
+
+**File: `/eval/workdir/sympy_sympy/sympy/core/relational.py`**
+
+I added a new `_eval_as_set()` method specifically for the `Equality` class that:
+
+```python
+def _eval_as_set(self):
+    # self is univariate and periodicity(self, x) in (0, None)
+    from sympy.solvers.solveset import solveset
+    from sympy.sets.conditionset import ConditionSet
+
+    syms = self.free_symbols
+    assert len(syms) == 1
+    x = syms.pop()
+
+    # For equations, solve the equation f = 0 where f = lhs - rhs
+    f = self.lhs - self.rhs
+
+    # Use solveset to solve the equation
+    solution = solveset(f, x, domain=S.Reals)
+
+    # If solveset returns a ConditionSet, return it as is
+    # This handles cases where the equation can't be solved explicitly
+    if isinstance(solution, ConditionSet):
+        return solution
+
+    # Otherwise return the solution directly
+    return solution
+```
+
+## Key Changes
+
+1. **Direct `solveset` usage**: For equations, we now call `solveset` directly instead of going through `solve_univariate_inequality`
+2. **Proper `ConditionSet` handling**: When `solveset` returns a `ConditionSet`, we return it as-is instead of raising `NotImplementedError`
+3. **Maintains compatibility**: Other equation types that can be solved explicitly still work as before
+
+## Test Case Added
+
+**File: `/eval/workdir/sympy_sympy/sympy/solvers/tests/test_solveset.py`**
+
+```python
+# Test for issue where as_set() was raising NotImplementedError
+# for transcendental equations instead of returning ConditionSet
+# This test verifies that Eq(n*cos(n) - 3*sin(n), 0).as_set()
+# returns ConditionSet instead of raising NotImplementedError
+assert Eq(n*cos(n) - 3*sin(n), 0).as_set() == \
+    ConditionSet(n, Eq(n*cos(n) - 3*sin(n), 0), S.Reals)
+```
+
+## Expected Behavior After Fix
+
+**Before (raises NotImplementedError):**
+```python
+Eq(n*cos(n) - 3*sin(n), 0).as_set()  # NotImplementedError
+```
+
+**After (returns ConditionSet):**
+```python
+Eq(n*cos(n) - 3*sin(n), 0).as_set()  # ConditionSet(n, Eq(n*cos(n) - 3*sin(n), 0), Reals)
+```
+
+This fix resolves the issue while maintaining backward compatibility and following the established pattern of returning `ConditionSet` for equations that cannot be solved explicitly.

@@ -1,0 +1,43 @@
+## Summary
+
+I've successfully fixed the ZeroDivisionError in scikit-learn's SVM implementation when using sparse data with empty support vectors. Here's what I accomplished:
+
+### 🔍 **Root Cause Analysis**
+The bug occurred in `sklearn/svm/base.py:291` in the `_sparse_fit` method. When there are no support vectors (`n_SV = 0`):
+- `dual_coef_indices.size` becomes 0
+- The division `dual_coef_indices.size / n_class` equals `0/1 = 0`
+- `np.arange(0, 1, step=0)` raises ZeroDivisionError because step=0
+
+### 🛠️ **Fix Implementation**
+**File**: `sklearn/svm/base.py:289-298`
+
+Added a conditional check to handle the empty support vectors case:
+
+```python
+if n_SV == 0:
+    # Handle case with no support vectors
+    self.dual_coef_ = sp.csr_matrix((n_class, 0))
+else:
+    # Original logic for when there are support vectors
+    dual_coef_indices = np.tile(np.arange(n_SV), n_class)
+    dual_coef_indptr = np.arange(0, dual_coef_indices.size + 1,
+                                 dual_coef_indices.size / n_class)
+    self.dual_coef_ = sp.csr_matrix(
+        (dual_coef_data, dual_coef_indices, dual_coef_indptr),
+        (n_class, n_SV))
+```
+
+### 🧪 **Test Coverage**
+**File**: `sklearn/svm/tests/test_sparse.py`
+
+Added `test_sparse_svr_empty_support_vectors()` which:
+- Reproduces the exact scenario from the bug report
+- Verifies no ZeroDivisionError is raised
+- Checks that `dual_coef_` has correct shape `(1, 0)` for regression
+- Ensures consistency between dense and sparse implementations
+
+### ✅ **Expected Results**
+- **Before**: `ZeroDivisionError: float division by zero`
+- **After**: `self.dual_coef_ = sp.csr_matrix((1, 0))` - empty sparse matrix with correct shape
+
+The fix is minimal, targeted, and preserves all existing functionality while resolving the edge case that caused the crash. The solution matches the expected behavior mentioned in the original bug report.

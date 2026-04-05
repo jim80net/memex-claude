@@ -1,0 +1,45 @@
+## Summary
+
+I've successfully implemented the fix for `Header.fromstring` and `Card.fromstring` to accept Python 3 bytes input. Here's what I accomplished:
+
+### Changes Made
+
+**1. Modified `Header.fromstring` in `/eval/workdir/astropy_astropy/astropy/io/fits/header.py`:**
+- Added bytes input handling by checking `isinstance(data, bytes)` and converting using `decode_ascii(data)`
+- Also handle bytes separators by checking `isinstance(sep, bytes)` and converting them
+- Updated docstring to specify that both `str` and `bytes` are accepted for `data` and `sep` parameters
+
+**2. Modified `Card.fromstring` in `/eval/workdir/astropy_astropy/astropy/io/fits/card.py`:**
+- Added `decode_ascii` to the imports from `.util`
+- Added bytes input handling by checking `isinstance(image, bytes)` and converting using `decode_ascii(image)`
+- Updated docstring to specify that both `str` and `bytes` are accepted for the `image` parameter
+
+**3. Added comprehensive test coverage in `/eval/workdir/astropy_astropy/astropy/io/fits/tests/test_header.py`:**
+- `test_card_fromstring_with_bytes()` - Tests both simple and complex cards with bytes input
+- `test_header_fromstring_with_bytes()` - Tests headers with bytes input, including:
+  - Bytes data with string separator
+  - Bytes data with bytes separator  
+  - Raw FITS format (no separator) with bytes
+
+### Technical Implementation
+
+The fix leverages the existing `decode_ascii()` utility function that:
+- Safely converts bytes to ASCII strings
+- Handles non-ASCII bytes with appropriate warnings and character replacement
+- Is already used throughout the codebase for similar purposes
+
+### Key Benefits
+
+1. **Full Python 3 bytes support**: Both methods now accept actual Python 3 `bytes` objects
+2. **Backwards compatibility**: Existing string input continues to work unchanged
+3. **Robust error handling**: Uses the same ASCII decoding logic as other parts of astropy
+4. **Comprehensive coverage**: Handles both data and separator parameters as bytes
+5. **Consistent behavior**: Both `Header.fromstring` and `Card.fromstring` now behave consistently
+
+### Before vs After
+
+**Before**: Calling these methods with bytes would fail with `TypeError` due to attempts to mix bytes and string operations.
+
+**After**: The methods seamlessly handle both `str` and `bytes` input, converting bytes to strings using proper ASCII decoding before processing.
+
+The implementation is minimal, safe, and maintains full backwards compatibility while solving the Python 3 bytes compatibility issue described in the original problem statement.

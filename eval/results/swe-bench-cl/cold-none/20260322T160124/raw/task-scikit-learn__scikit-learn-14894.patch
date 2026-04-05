@@ -1,0 +1,78 @@
+diff --git a/sklearn/svm/base.py b/sklearn/svm/base.py
+index 64cebe8375..e3b6469a61 100644
+--- a/sklearn/svm/base.py
++++ b/sklearn/svm/base.py
+@@ -286,12 +286,16 @@ class BaseLibSVM(BaseEstimator, metaclass=ABCMeta):
+             n_class = 1
+         n_SV = self.support_vectors_.shape[0]
+ 
+-        dual_coef_indices = np.tile(np.arange(n_SV), n_class)
+-        dual_coef_indptr = np.arange(0, dual_coef_indices.size + 1,
+-                                     dual_coef_indices.size / n_class)
+-        self.dual_coef_ = sp.csr_matrix(
+-            (dual_coef_data, dual_coef_indices, dual_coef_indptr),
+-            (n_class, n_SV))
++        if n_SV == 0:
++            # Handle case with no support vectors
++            self.dual_coef_ = sp.csr_matrix((n_class, 0))
++        else:
++            dual_coef_indices = np.tile(np.arange(n_SV), n_class)
++            dual_coef_indptr = np.arange(0, dual_coef_indices.size + 1,
++                                         dual_coef_indices.size / n_class)
++            self.dual_coef_ = sp.csr_matrix(
++                (dual_coef_data, dual_coef_indices, dual_coef_indptr),
++                (n_class, n_SV))
+ 
+     def predict(self, X):
+         """Perform regression on samples in X.
+diff --git a/sklearn/svm/tests/test_sparse.py b/sklearn/svm/tests/test_sparse.py
+index 7cf6e8af2a..280f91adf8 100644
+--- a/sklearn/svm/tests/test_sparse.py
++++ b/sklearn/svm/tests/test_sparse.py
+@@ -360,3 +360,46 @@ def test_consistent_proba():
+     with ignore_warnings(category=ConvergenceWarning):
+         proba_2 = a.fit(X, Y).predict_proba(X)
+     assert_array_almost_equal(proba_1, proba_2)
++
++
++def test_sparse_svr_empty_support_vectors():
++    """Test that SVR with sparse data handles empty support vectors correctly.
++
++    This test reproduces the bug reported in issue where SVR with sparse
++    data and parameters that result in no support vectors caused a
++    ZeroDivisionError in _sparse_fit.
++    """
++    # Data from the bug report that triggers empty support vectors
++    x_train = np.array([[0, 1, 0, 0],
++                        [0, 0, 0, 1],
++                        [0, 0, 1, 0],
++                        [0, 0, 0, 1]])
++    y_train = np.array([0.04, 0.04, 0.10, 0.16])
++
++    # SVR parameters from bug report that result in no support vectors
++    svr = svm.SVR(C=316.227766017, cache_size=200, coef0=0.0, degree=3,
++                  epsilon=0.1, gamma=1.0, kernel='linear', max_iter=15000,
++                  shrinking=True, tol=0.001, verbose=False)
++
++    # Test dense version works (baseline)
++    svr.fit(x_train, y_train)
++    n_support_dense = svr.support_vectors_.shape[0]
++
++    # Test sparse version - this should not raise ZeroDivisionError
++    x_train_sparse = sparse.csr_matrix(x_train)
++    svr_sparse = svm.SVR(C=316.227766017, cache_size=200, coef0=0.0, degree=3,
++                         epsilon=0.1, gamma=1.0, kernel='linear', max_iter=15000,
++                         shrinking=True, tol=0.001, verbose=False)
++
++    # This should not raise ZeroDivisionError
++    svr_sparse.fit(x_train_sparse, y_train)
++
++    # Check that dual_coef_ has correct shape when there are no support vectors
++    if svr_sparse.support_vectors_.shape[0] == 0:
++        # Expected shape: (n_class, n_support_vectors) = (1, 0) for regression
++        assert svr_sparse.dual_coef_.shape == (1, 0)
++        assert sparse.issparse(svr_sparse.dual_coef_)
++
++    # Check that results are consistent between dense and sparse
++    assert_array_equal(svr.support_vectors_, svr_sparse.support_vectors_.toarray())
++    assert_array_equal(svr.dual_coef_, svr_sparse.dual_coef_.toarray())

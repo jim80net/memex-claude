@@ -1,0 +1,71 @@
+diff --git a/sphinx/util/typing.py b/sphinx/util/typing.py
+index 87707d48f..ab6c5e121 100644
+--- a/sphinx/util/typing.py
++++ b/sphinx/util/typing.py
+@@ -117,6 +117,11 @@ def restify(cls: Optional[Type]) -> str:
+             return cls
+         elif cls in INVALID_BUILTIN_CLASSES:
+             return ':py:class:`%s`' % INVALID_BUILTIN_CLASSES[cls]
++        elif hasattr(cls, '__sphinx_mock__'):
++            # Handle mocked objects by using their display name
++            from sphinx.ext.autodoc.mock import ismock  # lazy loading
++            if ismock(cls) and hasattr(cls, '__display_name__'):
++                return ':py:class:`%s`' % cls.__display_name__
+         elif inspect.isNewType(cls):
+             if sys.version_info > (3, 10):
+                 # newtypes have correct module info since Python 3.10+
+diff --git a/tests/test_ext_autodoc_automodule.py b/tests/test_ext_autodoc_automodule.py
+index 59296a981..e9fcd45e4 100644
+--- a/tests/test_ext_autodoc_automodule.py
++++ b/tests/test_ext_autodoc_automodule.py
+@@ -131,3 +131,22 @@ def test_subclass_of_mocked_object(app):
+     options = {'members': None}
+     actual = do_autodoc(app, 'module', 'target.need_mocks', options)
+     assert '.. py:class:: Inherited(*args: Any, **kwargs: Any)' in actual
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc',
++                    confoverrides={'autodoc_mock_imports': ['missing_module',
++                                                            'missing_package1',
++                                                            'missing_package2',
++                                                            'missing_package3',
++                                                            'sphinx.missing_module4']})
++@pytest.mark.usefixtures("rollback_sysmodules")
++def test_mocked_class_inheritance_display(app):
++    """Test that base classes are correctly displayed for classes inheriting from mocked classes."""
++    sys.modules.pop('target', None)  # unload target module to clear the module cache
++
++    options = {'show-inheritance': None}
++    actual = do_autodoc(app, 'class', 'target.need_mocks.Inherited', options)
++
++    # The fix should ensure that the base class is displayed correctly as "missing_module.Class"
++    # rather than just "missing_module." (note the trailing dot in the broken version)
++    assert 'Bases: :py:class:`missing_module.Class`' in actual
+diff --git a/tests/test_util_typing.py b/tests/test_util_typing.py
+index d493a0040..4f11328e1 100644
+--- a/tests/test_util_typing.py
++++ b/tests/test_util_typing.py
+@@ -294,3 +294,23 @@ def test_stringify_type_union_operator():
+ 
+ def test_stringify_broken_type_hints():
+     assert stringify(BrokenType) == 'tests.test_util_typing.BrokenType'
++
++
++def test_restify_mocked_object():
++    """Test restify with mocked objects (fix for issue #8164 follow-up)."""
++    # Create a mock object that mimics _MockObject behavior
++    class MockedClass:
++        __sphinx_mock__ = True
++        __display_name__ = 'torch.nn.Module'
++        __qualname__ = ''  # This is the problematic empty qualname
++        __module__ = 'torch.nn'
++        __name__ = 'Module'
++
++    mock_obj = MockedClass()
++
++    # Before the fix, this would produce ":py:class:`torch.nn.`" (note the trailing dot)
++    # After the fix, it should produce ":py:class:`torch.nn.Module`"
++    result = restify(mock_obj)
++    expected = ":py:class:`torch.nn.Module`"
++
++    assert result == expected, f"Expected '{expected}', got '{result}'"

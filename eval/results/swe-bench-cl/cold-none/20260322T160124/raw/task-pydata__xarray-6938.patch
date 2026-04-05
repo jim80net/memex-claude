@@ -1,0 +1,78 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 5827b90a..61f095a0 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -538,16 +538,22 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+ 
+     def to_base_variable(self):
+         """Return this variable as a base xarray.Variable"""
++        # Make defensive copies of mutable attributes to prevent shared state
++        attrs = dict(self._attrs) if self._attrs is not None else None
++        encoding = dict(self._encoding) if self._encoding is not None else None
+         return Variable(
+-            self.dims, self._data, self._attrs, encoding=self._encoding, fastpath=True
++            self.dims, self._data, attrs, encoding=encoding, fastpath=True
+         )
+ 
+     to_variable = utils.alias(to_base_variable, "to_variable")
+ 
+     def to_index_variable(self):
+         """Return this variable as an xarray.IndexVariable"""
++        # Make defensive copies of mutable attributes to prevent shared state
++        attrs = dict(self._attrs) if self._attrs is not None else None
++        encoding = dict(self._encoding) if self._encoding is not None else None
+         return IndexVariable(
+-            self.dims, self._data, self._attrs, encoding=self._encoding, fastpath=True
++            self.dims, self._data, attrs, encoding=encoding, fastpath=True
+         )
+ 
+     to_coord = utils.alias(to_index_variable, "to_coord")
+diff --git a/xarray/tests/test_dataset.py b/xarray/tests/test_dataset.py
+index 9ea47163..3f1065e9 100644
+--- a/xarray/tests/test_dataset.py
++++ b/xarray/tests/test_dataset.py
+@@ -2995,6 +2995,44 @@ class TestDataset:
+         assert isinstance(actual.variables["x"], Variable)
+         assert actual.xindexes["y"].equals(expected.xindexes["y"])
+ 
++    def test_swap_dims_does_not_modify_original(self) -> None:
++        """Test that swap_dims does not modify the original object.
++
++        Regression test for issue where swap_dims could modify the original
++        Dataset when the same variable was involved in multiple transformations.
++        """
++        # Create initial dataset similar to the bug report scenario
++        original = Dataset(
++            data_vars={
++                "y": ("z", [1, 2, 3]),
++                "lev": ("z", [10, 20, 30]),
++            },
++        )
++
++        # Apply the transformation sequence from the bug report
++        ds2 = (
++            original.swap_dims(z="lev")
++            .rename_dims(lev="z")
++            .reset_index("lev")
++            .reset_coords()
++        )
++
++        # Store the original dims before calling swap_dims
++        original_lev_dims = ds2["lev"].dims
++        assert original_lev_dims == ("z",)
++
++        # Apply swap_dims - this should NOT modify the original ds2
++        result = ds2.swap_dims(z="lev")
++
++        # Check that ds2 was not modified
++        assert ds2["lev"].dims == original_lev_dims, (
++            f"Original object was modified: expected {original_lev_dims}, "
++            f"got {ds2['lev'].dims}"
++        )
++
++        # Check that the result has the expected dimensions
++        assert result["lev"].dims == ("lev",)
++
+     def test_expand_dims_error(self) -> None:
+         original = Dataset(
+             {

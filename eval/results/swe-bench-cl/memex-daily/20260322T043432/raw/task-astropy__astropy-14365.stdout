@@ -1,0 +1,54 @@
+## Summary
+
+I've successfully fixed the QDP table format case sensitivity issue in astropy. Here's what was done:
+
+### Problem
+The QDP reader was rejecting lowercase commands like `read serr 1 2` because the regular expression was case-sensitive, expecting only uppercase commands like `READ SERR 1 2`.
+
+### Root Cause
+In `/eval/workdir/astropy_astropy/astropy/io/ascii/qdp.py`, the `_line_type` function used a case-sensitive regular expression to match QDP commands.
+
+### Solution
+**Modified `/eval/workdir/astropy_astropy/astropy/io/ascii/qdp.py`:**
+
+1. **Line 71**: Added `re.IGNORECASE` flag to the regex compilation:
+   ```python
+   _line_type_re = re.compile(_type_re, re.IGNORECASE)
+   ```
+
+2. **Lines 35-37**: Updated the docstring with examples showing case-insensitive commands:
+   ```python
+   >>> _line_type("READ SERR 3")
+   'command'
+   >>> _line_type("read serr 1 2") 
+   'command'
+   >>> _line_type("Read Terr 1")
+   'command'
+   ```
+
+**Added comprehensive tests in `/eval/workdir/astropy_astropy/astropy/io/ascii/tests/test_qdp.py`:**
+
+1. **`test_lowercase_commands()`**: Tests that lowercase commands like `read serr 1 2` work correctly
+2. **`test_mixed_case_commands()`**: Tests mixed case commands like `Read Serr 1 2` and `READ terr 3`
+
+### Verification
+The fix was thoroughly tested to ensure:
+
+✅ **Lowercase commands work**: `read serr 1 2`, `read terr 3`  
+✅ **Mixed case commands work**: `Read Serr 1`, `READ terr 1`  
+✅ **Uppercase commands still work**: `READ SERR 3`, `READ TERR 1 2`  
+✅ **Existing functionality preserved**: Data lines, comments, NO lines still work  
+✅ **Command processing works**: The downstream logic correctly processes both case variants  
+
+### Impact
+- **Backward compatible**: All existing uppercase QDP files continue to work
+- **User-friendly**: Hand-written QDP files with lowercase commands now work as expected
+- **Follows QDP specification**: The actual QDP format is case-insensitive
+
+The original issue's test case now works correctly:
+```qdp
+read serr 1 2
+1 0.5 1 0.5
+```
+
+This QDP file will now be successfully read as a `Table` with error columns, matching the behavior of other QDP readers.
