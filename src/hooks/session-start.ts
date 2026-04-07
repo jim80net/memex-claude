@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -15,8 +16,15 @@ const execFileAsync = promisify(execFile);
 const CRON_MARKER = "memex-sleep";
 
 function getPluginRoot(): string {
+  // Dev mode: resolve from source file location
   const thisFile = fileURLToPath(import.meta.url);
-  return join(dirname(thisFile), "..", "..");
+  const devRoot = join(dirname(thisFile), "..", "..");
+  if (existsSync(join(devRoot, "package.json"))) {
+    return devRoot;
+  }
+  // Compiled binary: import.meta.url is virtual (Bun bundles into $bunfs).
+  // Binary is at <plugin-root>/bin/memex.bin, so go up one level.
+  return join(dirname(process.execPath), "..");
 }
 
 export async function handleSessionStart(

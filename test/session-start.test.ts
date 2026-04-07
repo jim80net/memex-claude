@@ -211,6 +211,24 @@ describe("handleSessionStart", () => {
     }
   });
 
+  it("combines takeover rule and sleep schedule in one response", async () => {
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED, "takeover");
+
+    expect(result.additionalContext).toBeDefined();
+    // Should contain both memory-creation rule AND cron setup
+    expect(result.additionalContext).toContain("Memory Management");
+    expect(result.additionalContext).toContain("sleep schedule setup needed");
+
+    if (prev !== undefined) {
+      process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
+    } else {
+      delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    }
+  });
+
   it("only warns about auto-memory once (watermark)", async () => {
     const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
     delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
