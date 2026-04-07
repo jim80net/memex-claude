@@ -186,6 +186,31 @@ describe("handleSessionStart", () => {
     if (prev !== undefined) process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
   });
 
+  it("injects memory-creation rule in takeover mode when auto-memory is disabled", async () => {
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "takeover");
+
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).toContain("Memory Management");
+    expect(result.additionalContext).toContain("queries");
+
+    if (prev !== undefined) {
+      process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
+    } else {
+      delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    }
+  });
+
+  it("does not inject memory-creation rule in assist mode", async () => {
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "assist");
+
+    if (result.additionalContext) {
+      expect(result.additionalContext).not.toContain("Memory Management");
+    }
+  });
+
   it("only warns about auto-memory once (watermark)", async () => {
     const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
     delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;

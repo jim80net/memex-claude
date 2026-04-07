@@ -50,10 +50,20 @@ export async function handleSessionStart(
   }
 
   // 3. Auto-memory interop
-  if (autoMemoryMode === "takeover" && isAutoMemoryEnabled()) {
-    if (!(await hasAutoMemoryWarned())) {
+  if (autoMemoryMode === "takeover") {
+    const sections: string[] = [];
+
+    if (isAutoMemoryEnabled() && !(await hasAutoMemoryWarned())) {
       await writeAutoMemoryWatermark();
-      return { additionalContext: buildAutoMemoryWarning() };
+      sections.push(buildAutoMemoryWarning());
+    }
+
+    // Always inject memory-creation rule in takeover mode
+    const rule = await readMemoryCreationRule();
+    if (rule) sections.push(rule);
+
+    if (sections.length > 0) {
+      return { additionalContext: sections.join("\n\n") };
     }
   }
 
@@ -70,6 +80,20 @@ export async function handleSessionStart(
   }
 
   return {};
+}
+
+async function readMemoryCreationRule(): Promise<string> {
+  const skillPath = join(getPluginRoot(), "skills", "memory-creation", "SKILL.md");
+  try {
+    const raw = await readFile(skillPath, "utf-8");
+    // Strip frontmatter (everything between first --- and second ---)
+    const fmEnd = raw.indexOf("---", 4);
+    const body = fmEnd >= 0 ? raw.slice(raw.indexOf("\n", fmEnd) + 1).trim() : raw;
+    return `## Memex: Memory creation instructions\n\n${body}`;
+  } catch {
+    process.stderr.write("memex: could not read memory-creation SKILL.md\n");
+    return "";
+  }
 }
 
 async function hasBeenPrompted(): Promise<boolean> {
