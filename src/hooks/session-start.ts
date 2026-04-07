@@ -23,10 +23,11 @@ export async function handleSessionStart(
   input: HookInput,
   syncConfig: SyncConfig,
   sleepConfig: SleepScheduleConfig,
-  autoMemoryMode: AutoMemoryMode = "assist"
+  autoMemoryMode: AutoMemoryMode
 ): Promise<HookOutput> {
   const cwd = input.cwd || process.cwd();
   const paths = getClaudePaths();
+  const sections: string[] = [];
 
   // 1. Register this project
   try {
@@ -51,8 +52,6 @@ export async function handleSessionStart(
 
   // 3. Auto-memory interop
   if (autoMemoryMode === "takeover") {
-    const sections: string[] = [];
-
     if (isAutoMemoryEnabled() && !(await hasAutoMemoryWarned())) {
       await writeAutoMemoryWatermark();
       sections.push(buildAutoMemoryWarning());
@@ -61,10 +60,6 @@ export async function handleSessionStart(
     // Always inject memory-creation rule in takeover mode
     const rule = await readMemoryCreationRule();
     if (rule) sections.push(rule);
-
-    if (sections.length > 0) {
-      return { additionalContext: sections.join("\n\n") };
-    }
   }
 
   // 4. Sleep schedule cron check
@@ -72,11 +67,14 @@ export async function handleSessionStart(
     const cronExists = await hasCronEntry();
     if (!cronExists) {
       await writeCronWatermark();
-      return {
-        additionalContext: buildCronSetupInstructions(sleepConfig),
-      };
+      sections.push(buildCronSetupInstructions(sleepConfig));
+    } else {
+      await writeCronWatermark();
     }
-    await writeCronWatermark();
+  }
+
+  if (sections.length > 0) {
+    return { additionalContext: sections.join("\n\n") };
   }
 
   return {};
