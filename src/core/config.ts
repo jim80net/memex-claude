@@ -27,7 +27,10 @@ export type SleepScheduleConfig = {
   projects: string[];
 };
 
+export type AutoMemoryMode = "assist" | "takeover";
+
 export type SkillRouterConfig = MemexCoreConfig & {
+  autoMemoryMode: AutoMemoryMode;
   skillDirs: string[];
   sync: SyncConfig;
   sleepSchedule: SleepScheduleConfig;
@@ -42,6 +45,7 @@ export type SkillRouterConfig = MemexCoreConfig & {
 export const DEFAULT_CONFIG: SkillRouterConfig = {
   ...DEFAULT_CORE_CONFIG,
   enabled: true,
+  autoMemoryMode: "assist",
   skillDirs: [],
   sync: {
     enabled: false,
@@ -98,6 +102,9 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
   const base = { ...DEFAULT_CONFIG };
 
   if (typeof user.enabled === "boolean") base.enabled = user.enabled;
+  if (user.autoMemoryMode === "assist" || user.autoMemoryMode === "takeover") {
+    base.autoMemoryMode = user.autoMemoryMode;
+  }
   if (typeof user.embeddingModel === "string") base.embeddingModel = user.embeddingModel;
   if (typeof user.cacheTimeMs === "number") base.cacheTimeMs = user.cacheTimeMs;
   if (Array.isArray(user.skillDirs)) base.skillDirs = user.skillDirs.map(String);
@@ -139,4 +146,8 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
   }
 
   return base;
+}
+
+export function isAutoMemoryEnabled(): boolean {
+  return process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY !== "1";
 }
