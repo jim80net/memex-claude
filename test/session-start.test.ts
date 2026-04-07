@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { handleSessionStart } from "../src/hooks/session-start.ts";
 import type { HookInput, SyncConfig } from "@jim80net/memex-core";
-import type { SleepScheduleConfig } from "../src/core/config.ts";
+import type { SleepScheduleConfig, AutoMemoryMode } from "../src/core/config.ts";
 
 // Mock homedir
 vi.mock("node:os", async (importOriginal) => {
@@ -98,7 +98,7 @@ describe("handleSessionStart", () => {
   });
 
   it("returns empty output when sleep schedule is disabled", async () => {
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED);
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "assist");
     expect(result).toEqual({});
   });
 
@@ -106,7 +106,7 @@ describe("handleSessionStart", () => {
     const { registerProject } = await import("@jim80net/memex-core");
     (registerProject as ReturnType<typeof vi.fn>).mockClear();
 
-    await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED);
+    await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "assist");
 
     expect(registerProject).toHaveBeenCalledWith(
       expect.any(Object),
@@ -115,7 +115,7 @@ describe("handleSessionStart", () => {
   });
 
   it("returns cron setup instructions when sleep schedule enabled and no cron exists", async () => {
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED);
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED, "assist");
 
     expect(result.additionalContext).toBeDefined();
     expect(result.additionalContext).toContain("sleep schedule setup needed");
@@ -124,7 +124,7 @@ describe("handleSessionStart", () => {
 
   it("defaults to 03:00 when dailyAt is malformed", async () => {
     const malformed: SleepScheduleConfig = { enabled: true, dailyAt: "garbage", projects: [] };
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, malformed);
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, malformed, "assist");
 
     expect(result.additionalContext).toBeDefined();
     expect(result.additionalContext).toContain("0 3 * * *");
@@ -134,8 +134,73 @@ describe("handleSessionStart", () => {
     const watermarkPath = join(fakeHome, ".claude", "cache", "memex-cron-watermark");
     await writeFile(watermarkPath, new Date().toISOString(), "utf-8");
 
-    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED);
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_ENABLED, "assist");
 
     expect(result.additionalContext).toBeUndefined();
+  });
+
+  it("warns in takeover mode when auto-memory is still enabled", async () => {
+    // Simulate CLAUDE_CODE_DISABLE_AUTO_MEMORY not set (auto-memory enabled)
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "takeover");
+
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).toContain("takeover mode");
+    expect(result.additionalContext).toContain("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+
+    // Restore
+    if (prev !== undefined) process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
+  });
+
+  it("does not warn in takeover mode when auto-memory is disabled", async () => {
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "takeover");
+
+    // Should not contain warning — may contain memory-creation rule instead
+    if (result.additionalContext) {
+      expect(result.additionalContext).not.toContain("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+    }
+
+    // Restore
+    if (prev !== undefined) {
+      process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
+    } else {
+      delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    }
+  });
+
+  it("does not warn in assist mode regardless of auto-memory state", async () => {
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+
+    const result = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "assist");
+
+    if (result.additionalContext) {
+      expect(result.additionalContext).not.toContain("takeover mode");
+    }
+
+    if (prev !== undefined) process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
+  });
+
+  it("only warns about auto-memory once (watermark)", async () => {
+    const prev = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    delete process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+
+    // First call — should warn
+    const result1 = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "takeover");
+    expect(result1.additionalContext).toContain("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+
+    // Second call — watermark exists, should not warn again
+    const result2 = await handleSessionStart(BASE_INPUT, SYNC_DISABLED, SLEEP_DISABLED, "takeover");
+    // The additionalContext should either be undefined or not contain the warning
+    if (result2.additionalContext) {
+      expect(result2.additionalContext).not.toContain("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+    }
+
+    if (prev !== undefined) process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = prev;
   });
 });

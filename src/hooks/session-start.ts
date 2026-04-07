@@ -6,7 +6,8 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { syncPull, loadRegistry, saveRegistry, registerProject, withFileLock } from "@jim80net/memex-core";
 import type { HookInput, HookOutput, SyncConfig } from "@jim80net/memex-core";
-import type { SleepScheduleConfig } from "../core/config.ts";
+import type { SleepScheduleConfig, AutoMemoryMode } from "../core/config.ts";
+import { isAutoMemoryEnabled } from "../core/config.ts";
 import { getClaudePaths } from "../core/paths.ts";
 
 const execFileAsync = promisify(execFile);
@@ -21,7 +22,8 @@ function getPluginRoot(): string {
 export async function handleSessionStart(
   input: HookInput,
   syncConfig: SyncConfig,
-  sleepConfig: SleepScheduleConfig
+  sleepConfig: SleepScheduleConfig,
+  autoMemoryMode: AutoMemoryMode = "assist"
 ): Promise<HookOutput> {
   const cwd = input.cwd || process.cwd();
   const paths = getClaudePaths();
@@ -47,7 +49,15 @@ export async function handleSessionStart(
     }
   }
 
-  // 3. Sleep schedule cron check
+  // 3. Auto-memory interop
+  if (autoMemoryMode === "takeover" && isAutoMemoryEnabled()) {
+    if (!(await hasAutoMemoryWarned())) {
+      await writeAutoMemoryWatermark();
+      return { additionalContext: buildAutoMemoryWarning() };
+    }
+  }
+
+  // 4. Sleep schedule cron check
   if (sleepConfig.enabled && !(await hasBeenPrompted())) {
     const cronExists = await hasCronEntry();
     if (!cronExists) {
@@ -90,6 +100,52 @@ async function writeCronWatermark(): Promise<void> {
   } catch {
     // Best-effort
   }
+}
+
+async function hasAutoMemoryWarned(): Promise<boolean> {
+  try {
+    await readFile(getAutoMemoryWatermarkPath(), "utf-8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getAutoMemoryWatermarkPath(): string {
+  return join(getClaudePaths().cacheDir, "memex-automemory-warned");
+}
+
+async function writeAutoMemoryWatermark(): Promise<void> {
+  try {
+    const watermarkPath = getAutoMemoryWatermarkPath();
+    await mkdir(dirname(watermarkPath), { recursive: true });
+    const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
+    await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+    await rename(tmpPath, watermarkPath);
+  } catch {
+    // Best-effort
+  }
+}
+
+function buildAutoMemoryWarning(): string {
+  return [
+    "## Memex: Auto-memory conflict detected",
+    "",
+    "Memex is in **takeover mode** but Claude Code auto-memory is still enabled.",
+    "This will cause duplicate memory writes — both systems will try to create and manage memory files.",
+    "",
+    "To disable auto-memory, set `CLAUDE_CODE_DISABLE_AUTO_MEMORY` to `1` in `~/.claude/settings.json`:",
+    "",
+    "```json",
+    "{",
+    '  "env": {',
+    '    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"',
+    "  }",
+    "}",
+    "```",
+    "",
+    "Or set `autoMemoryMode` to `assist` in `~/.claude/memex.json` to let auto-memory stay authoritative.",
+  ].join("\n");
 }
 
 function buildCronSetupInstructions(config: SleepScheduleConfig): string {
