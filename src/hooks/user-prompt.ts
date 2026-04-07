@@ -1,24 +1,32 @@
 import type { SkillIndex } from "@jim80net/memex-core";
 import type { HookInput, HookOutput } from "@jim80net/memex-core";
 import { loadTelemetry, saveTelemetry, recordMatch, withFileLock } from "@jim80net/memex-core";
-import type { HookConfig } from "../core/config.ts";
+import type { HookConfig, AutoMemoryMode } from "../core/config.ts";
 import { loadSession, saveSession, hasRuleBeenShown, markRuleShown } from "../core/session.ts";
 import { getClaudePaths } from "../core/paths.ts";
 
 export async function handleUserPrompt(
   input: HookInput,
   index: SkillIndex,
-  hookConfig: HookConfig
+  hookConfig: HookConfig,
+  autoMemoryMode: AutoMemoryMode
 ): Promise<HookOutput> {
   const prompt = input.prompt;
   if (!prompt || prompt.trim().length === 0) return {};
+
+  // In assist mode, filter out memory types — auto-memory already loaded them
+  let types = hookConfig.types;
+  if (autoMemoryMode === "assist") {
+    types = types.filter(t => t !== "memory" && t !== "session-learning");
+    if (types.length === 0) return {};
+  }
 
   // Search for matching entries
   const results = await index.search(
     prompt,
     hookConfig.topK,
     hookConfig.threshold,
-    hookConfig.types
+    types
   );
 
   if (results.length === 0) return {};

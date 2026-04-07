@@ -94,7 +94,7 @@ async function main(): Promise<void> {
 
       case "UserPromptSubmit":
         if (config.hooks.UserPromptSubmit.enabled) {
-          result = await handleUserPrompt(input, index, config.hooks.UserPromptSubmit);
+          result = await handleUserPrompt(input, index, config.hooks.UserPromptSubmit, config.autoMemoryMode);
         }
         break;
 
