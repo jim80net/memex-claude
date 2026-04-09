@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/jim80net/memex-claude/compare/v1.7.0...v1.8.0) (2026-04-09)
+
+
+### Features
+
+* auto-memory interop with assist/takeover modes ([#45](https://github.com/jim80net/memex-claude/issues/45)) ([eb00cb7](https://github.com/jim80net/memex-claude/commit/eb00cb7e49516fdad8a44fd247fed186f7eb2745))
+* bump @jim80net/memex-core to ^0.4.0 ([#46](https://github.com/jim80net/memex-claude/issues/46)) ([32694ce](https://github.com/jim80net/memex-claude/commit/32694ce067af730d1cca932b795a8f2fbe04fafa))
+
 ## [1.7.0](https://github.com/jim80net/memex-claude/compare/v1.6.0...v1.7.0) (2026-04-02)
 
 
