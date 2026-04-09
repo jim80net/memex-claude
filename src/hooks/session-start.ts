@@ -123,10 +123,12 @@ async function hasCronEntry(): Promise<boolean> {
 async function writeCronWatermark(): Promise<void> {
   try {
     const watermarkPath = getClaudePaths().cronWatermarkPath;
-    await mkdir(dirname(watermarkPath), { recursive: true });
-    const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
-    await writeFile(tmpPath, new Date().toISOString(), "utf-8");
-    await rename(tmpPath, watermarkPath);
+    await withFileLock(watermarkPath, async () => {
+      await mkdir(dirname(watermarkPath), { recursive: true });
+      const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
+      await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+      await rename(tmpPath, watermarkPath);
+    });
   } catch {
     // Best-effort
   }
@@ -144,10 +146,12 @@ async function hasAutoMemoryWarned(): Promise<boolean> {
 async function writeAutoMemoryWatermark(): Promise<void> {
   try {
     const watermarkPath = getClaudePaths().autoMemoryWatermarkPath;
-    await mkdir(dirname(watermarkPath), { recursive: true });
-    const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
-    await writeFile(tmpPath, new Date().toISOString(), "utf-8");
-    await rename(tmpPath, watermarkPath);
+    await withFileLock(watermarkPath, async () => {
+      await mkdir(dirname(watermarkPath), { recursive: true });
+      const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
+      await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+      await rename(tmpPath, watermarkPath);
+    });
   } catch {
     // Best-effort
   }
