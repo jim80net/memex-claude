@@ -134,20 +134,16 @@ async function writeCronWatermark(): Promise<void> {
 
 async function hasAutoMemoryWarned(): Promise<boolean> {
   try {
-    await readFile(getAutoMemoryWatermarkPath(), "utf-8");
+    await readFile(getClaudePaths().autoMemoryWatermarkPath, "utf-8");
     return true;
   } catch {
     return false;
   }
 }
 
-function getAutoMemoryWatermarkPath(): string {
-  return join(getClaudePaths().cacheDir, "memex-automemory-warned");
-}
-
 async function writeAutoMemoryWatermark(): Promise<void> {
   try {
-    const watermarkPath = getAutoMemoryWatermarkPath();
+    const watermarkPath = getClaudePaths().autoMemoryWatermarkPath;
     await mkdir(dirname(watermarkPath), { recursive: true });
     const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
     await writeFile(tmpPath, new Date().toISOString(), "utf-8");

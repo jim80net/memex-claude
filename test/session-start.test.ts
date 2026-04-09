@@ -41,6 +41,7 @@ vi.mock("../src/core/paths.ts", () => ({
       configPath: "/fake/memex.json",
       preCompactDir: join(fakeCache, "pre-compact"),
       cronWatermarkPath: join(fakeCache, "memex-cron-watermark"),
+      autoMemoryWatermarkPath: join(fakeCache, "memex-automemory-warned"),
       globalSkillsDir: "/fake/skills",
       globalRulesDir: "/fake/rules",
     };

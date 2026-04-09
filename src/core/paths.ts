@@ -7,6 +7,7 @@ export type ClaudePaths = MemexPaths & {
   configPath: string;
   preCompactDir: string;
   cronWatermarkPath: string;
+  autoMemoryWatermarkPath: string;
 };
 
 export function getClaudePaths(): ClaudePaths {
@@ -24,6 +25,7 @@ export function getClaudePaths(): ClaudePaths {
     configPath: join(home, ".claude", "memex.json"),
     preCompactDir: join(cacheDir, "pre-compact"),
     cronWatermarkPath: join(cacheDir, "memex-cron-watermark"),
+    autoMemoryWatermarkPath: join(cacheDir, "memex-automemory-warned"),
     globalSkillsDir: join(home, ".claude", "skills"),
     globalRulesDir: join(home, ".claude", "rules"),
   };
