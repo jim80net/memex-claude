@@ -1,6 +1,6 @@
 {
   "name": "memex-claude",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Memex skill/memory/rule router for Claude Code — semantic context injection via hooks",
   "license": "MIT",
   "repository": {
