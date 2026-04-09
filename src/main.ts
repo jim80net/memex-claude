@@ -89,12 +89,12 @@ async function main(): Promise<void> {
   try {
     switch (event) {
       case "SessionStart":
-        result = await handleSessionStart(input, config.sync, config.sleepSchedule);
+        result = await handleSessionStart(input, config.sync, config.sleepSchedule, config.autoMemoryMode);
         break;
 
       case "UserPromptSubmit":
         if (config.hooks.UserPromptSubmit.enabled) {
-          result = await handleUserPrompt(input, index, config.hooks.UserPromptSubmit);
+          result = await handleUserPrompt(input, index, config.hooks.UserPromptSubmit, config.autoMemoryMode);
         }
         break;
 

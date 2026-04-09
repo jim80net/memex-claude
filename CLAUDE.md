@@ -24,7 +24,7 @@ bun run build.ts     # compile standalone binary
 - `src/main.ts` — Entry point: constructs `SkillIndex`, `LocalEmbeddingProvider`, `ScanDirs`, dispatches by `hook_event_name`
 - `bin/` — Wrapper scripts (memex, memex.cmd, install.sh, sleep-schedule.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
-- `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover)
+- `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover, memory-creation)
 - `test/` — Vitest tests for hook handlers and claude-specific modules
 
 ### Scan sources
@@ -73,6 +73,17 @@ When `sync.enabled` is true in `~/.claude/memex.json`, the router syncs rules, s
 - **Stop**: copy local changes to sync repo, `git commit && push`
 - **Project identity**: git remote URL → `host/owner/repo`; non-git projects → `_local/<encoded-path>`
 - **Config**: `sync.repo` (git URL), `sync.projectMappings` (manual overrides)
+
+### Auto-memory interop
+
+The `autoMemoryMode` key in `~/.claude/memex.json` controls how memex coexists with Claude Code's built-in auto-memory:
+
+| Mode | Default | Auto-memory | Memory injection | Memory creation |
+|------|---------|-------------|-----------------|-----------------|
+| `assist` | Yes | Authoritative | Suppressed (auto-memory handles it) | Auto-memory handles it |
+| `takeover` | No | Should be disabled | Memex semantic injection | Session-start rule + manual /reflect, /deep-sleep |
+
+In `assist` mode, memex filters `memory` and `session-learning` types from UserPromptSubmit search. In `takeover` mode, session-start injects a memory-creation rule and warns if `CLAUDE_CODE_DISABLE_AUTO_MEMORY` is not `1`.
 
 ### Rule frontmatter extensions
 

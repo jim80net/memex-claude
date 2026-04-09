@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -6,7 +7,8 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { syncPull, loadRegistry, saveRegistry, registerProject, withFileLock } from "@jim80net/memex-core";
 import type { HookInput, HookOutput, SyncConfig } from "@jim80net/memex-core";
-import type { SleepScheduleConfig } from "../core/config.ts";
+import type { SleepScheduleConfig, AutoMemoryMode } from "../core/config.ts";
+import { isAutoMemoryEnabled } from "../core/config.ts";
 import { getClaudePaths } from "../core/paths.ts";
 
 const execFileAsync = promisify(execFile);
@@ -14,17 +16,26 @@ const execFileAsync = promisify(execFile);
 const CRON_MARKER = "memex-sleep";
 
 function getPluginRoot(): string {
+  // Dev mode: resolve from source file location
   const thisFile = fileURLToPath(import.meta.url);
-  return join(dirname(thisFile), "..", "..");
+  const devRoot = join(dirname(thisFile), "..", "..");
+  if (existsSync(join(devRoot, "package.json"))) {
+    return devRoot;
+  }
+  // Compiled binary: import.meta.url is virtual (Bun bundles into $bunfs).
+  // Binary is at <plugin-root>/bin/memex.bin, so go up one level.
+  return join(dirname(process.execPath), "..");
 }
 
 export async function handleSessionStart(
   input: HookInput,
   syncConfig: SyncConfig,
-  sleepConfig: SleepScheduleConfig
+  sleepConfig: SleepScheduleConfig,
+  autoMemoryMode: AutoMemoryMode
 ): Promise<HookOutput> {
   const cwd = input.cwd || process.cwd();
   const paths = getClaudePaths();
+  const sections: string[] = [];
 
   // 1. Register this project
   try {
@@ -47,19 +58,48 @@ export async function handleSessionStart(
     }
   }
 
-  // 3. Sleep schedule cron check
+  // 3. Auto-memory interop
+  if (autoMemoryMode === "takeover") {
+    if (isAutoMemoryEnabled() && !(await hasAutoMemoryWarned())) {
+      await writeAutoMemoryWatermark();
+      sections.push(buildAutoMemoryWarning());
+    }
+
+    // Always inject memory-creation rule in takeover mode
+    const rule = await readMemoryCreationRule();
+    if (rule) sections.push(rule);
+  }
+
+  // 4. Sleep schedule cron check
   if (sleepConfig.enabled && !(await hasBeenPrompted())) {
     const cronExists = await hasCronEntry();
     if (!cronExists) {
       await writeCronWatermark();
-      return {
-        additionalContext: buildCronSetupInstructions(sleepConfig),
-      };
+      sections.push(buildCronSetupInstructions(sleepConfig));
+    } else {
+      await writeCronWatermark();
     }
-    await writeCronWatermark();
+  }
+
+  if (sections.length > 0) {
+    return { additionalContext: sections.join("\n\n") };
   }
 
   return {};
+}
+
+async function readMemoryCreationRule(): Promise<string> {
+  const skillPath = join(getPluginRoot(), "skills", "memory-creation", "SKILL.md");
+  try {
+    const raw = await readFile(skillPath, "utf-8");
+    // Strip frontmatter (everything between first --- and second ---)
+    const fmEnd = raw.indexOf("---", 4);
+    const body = fmEnd >= 0 ? raw.slice(raw.indexOf("\n", fmEnd) + 1).trim() : raw;
+    return `## Memex: Memory creation instructions\n\n${body}`;
+  } catch {
+    process.stderr.write("memex: could not read memory-creation SKILL.md\n");
+    return "";
+  }
 }
 
 async function hasBeenPrompted(): Promise<boolean> {
@@ -84,12 +124,58 @@ async function writeCronWatermark(): Promise<void> {
   try {
     const watermarkPath = getClaudePaths().cronWatermarkPath;
     await mkdir(dirname(watermarkPath), { recursive: true });
-    const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
-    await writeFile(tmpPath, new Date().toISOString(), "utf-8");
-    await rename(tmpPath, watermarkPath);
+    await withFileLock(watermarkPath, async () => {
+      const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
+      await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+      await rename(tmpPath, watermarkPath);
+    });
   } catch {
     // Best-effort
   }
+}
+
+async function hasAutoMemoryWarned(): Promise<boolean> {
+  try {
+    await readFile(getClaudePaths().autoMemoryWatermarkPath, "utf-8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeAutoMemoryWatermark(): Promise<void> {
+  try {
+    const watermarkPath = getClaudePaths().autoMemoryWatermarkPath;
+    await withFileLock(watermarkPath, async () => {
+      await mkdir(dirname(watermarkPath), { recursive: true });
+      const tmpPath = watermarkPath + "." + randomBytes(4).toString("hex") + ".tmp";
+      await writeFile(tmpPath, new Date().toISOString(), "utf-8");
+      await rename(tmpPath, watermarkPath);
+    });
+  } catch {
+    // Best-effort
+  }
+}
+
+function buildAutoMemoryWarning(): string {
+  return [
+    "## Memex: Auto-memory conflict detected",
+    "",
+    "Memex is in **takeover mode** but Claude Code auto-memory is still enabled.",
+    "This will cause duplicate memory writes — both systems will try to create and manage memory files.",
+    "",
+    "To disable auto-memory, set `CLAUDE_CODE_DISABLE_AUTO_MEMORY` to `1` in `~/.claude/settings.json`:",
+    "",
+    "```json",
+    "{",
+    '  "env": {',
+    '    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"',
+    "  }",
+    "}",
+    "```",
+    "",
+    "Or set `autoMemoryMode` to `assist` in `~/.claude/memex.json` to let auto-memory stay authoritative.",
+  ].join("\n");
 }
 
 function buildCronSetupInstructions(config: SleepScheduleConfig): string {
