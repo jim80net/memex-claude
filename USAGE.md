@@ -110,6 +110,7 @@ Cross-machine sync via a private git repo. See [Cross-machine sync](#cross-machi
 | `autoPull` | boolean | `true` | Pull from remote on session start |
 | `autoCommitPush` | boolean | `true` | Commit and push changes on session end |
 | `projectMappings` | object | `{}` | Manual overrides: local path to canonical project ID |
+| `caseSensitive` | boolean | `false` | Preserve case in canonical project IDs. When `false` (default), all project IDs are lowercased across manual mappings, git remote URLs, and encoded `_local/` fallbacks, so `GitHub.com:Jim80Net/Repo` and `github.com:jim80net/repo` collapse to the same sync repo path. |
 
 ## Rules
 
@@ -245,4 +246,6 @@ Memories are stored per-project. The router resolves project identity using a ca
 2. **Git remote URL** — normalized to `host/owner/repo` (handles SSH + HTTPS, strips `.git`)
 3. **Encoded path** — falls back to `_local/<encoded-cwd>` for non-git directories
 
-This means the same git project on different machines (with different checkout paths) maps to the same canonical location in the sync repo.
+All three paths are lowercased by default, so the same git project on different machines (with different checkout paths **or different casing** — e.g., `Jim80Net/Repo` vs `jim80net/repo`) maps to the same canonical location in the sync repo. Set `sync.caseSensitive: true` to preserve the original casing.
+
+On first sync after upgrading from memex-core < 0.4, `syncPull` runs a one-shot migration that renames any legacy mixed-case directories under `projects/` to lowercase and writes a `.memex-sync/version.json` marker so the scan only runs once. The migration is safe across devices, idempotent, and handles case-insensitive filesystems (macOS APFS, Windows NTFS) correctly.
