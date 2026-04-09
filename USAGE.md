@@ -110,7 +110,7 @@ Cross-machine sync via a private git repo. See [Cross-machine sync](#cross-machi
 | `autoPull` | boolean | `true` | Pull from remote on session start |
 | `autoCommitPush` | boolean | `true` | Commit and push changes on session end |
 | `projectMappings` | object | `{}` | Manual overrides: local path to canonical project ID |
-| `caseSensitive` | boolean | `false` | Preserve case in canonical project IDs. When `false` (default), all project IDs are lowercased across manual mappings, git remote URLs, and encoded `_local/` fallbacks, so `GitHub.com:Jim80Net/Repo` and `github.com:jim80net/repo` collapse to the same sync repo path. |
+| `caseSensitive` | boolean | `false` | Preserve case in canonical project IDs. When `false` (default), all project IDs are lowercased across manual mappings, git remote URLs, and encoded `_local/` fallbacks, so clones of `git@github.com:Jim80Net/Repo.git` and `git@github.com:jim80net/repo.git` both map to the same canonical id `github.com/jim80net/repo`. |
 
 ## Rules
 
