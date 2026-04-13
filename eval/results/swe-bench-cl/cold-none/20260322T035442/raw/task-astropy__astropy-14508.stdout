@@ -1,0 +1,26 @@
+## Summary
+
+I've successfully implemented a fix for the FITS Card float formatting issue. Here's what I did:
+
+### **Problem Analysis**
+The issue was in the `_format_float()` function in `astropy/io/fits/card.py` at line 1302, where `f"{value:.16G}"` was creating unnecessarily long representations like `"0.009124999999999999"` instead of the simpler `"0.009125"`. This extra length forced comments to be truncated in FITS cards.
+
+### **Solution Implemented**
+I modified the `_format_float()` function to:
+1. **Try `str(value)` first** - This gives the most natural string representation
+2. **Check if it fits in 20 characters** and has proper decimal formatting
+3. **Fall back to original logic** if the simple representation isn't suitable
+4. **Maintain all existing formatting rules** (scientific notation, decimal points, etc.)
+
+### **Key Changes**
+- **File**: `/eval/workdir/astropy_astropy/astropy/io/fits/card.py:1300-1328`
+- **Function**: `_format_float(value)`
+- **Test added**: `/eval/workdir/astropy_astropy/astropy/io/fits/tests/test_header.py` - `test_float_efficient_formatting()`
+
+### **Results Demonstrated**
+✅ **Fixed the specific issue**: `0.009125` now formats as `"0.009125"` (8 chars) instead of `"0.009124999999999999"` (20 chars)  
+✅ **Preserves comments**: The full comment `"[m] radius arround actuator to avoid"` is now preserved  
+✅ **Backward compatible**: All existing float formatting works the same  
+✅ **Particularly effective for HIERARCH cards**: Where space conservation matters most  
+
+The fix saves 12 characters in the problematic case, which allows the complete comment to be preserved instead of being truncated. This resolves the core issue where "some keyword/value/comment combinations were impossible to create via `io.fits` even though they are entirely possible in FITS."

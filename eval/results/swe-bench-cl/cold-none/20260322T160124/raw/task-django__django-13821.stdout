@@ -1,0 +1,24 @@
+I've successfully updated Django to drop support for SQLite < 3.9.0. Here's what was accomplished:
+
+## Changes Made
+
+### Core Changes
+1. **django/db/backends/sqlite3/base.py:67-68** - Updated version check from `(3, 8, 3)` to `(3, 9, 0)` and error message
+2. **tests/backends/sqlite/tests.py:33-35** - Updated test to use SQLite 3.8.9 (< 3.9.0) and expect new error message
+
+### Documentation Updates  
+3. **docs/ref/databases.txt:682** - Updated from "SQLite 3.8.3 and later" to "SQLite 3.9.0 and later"
+4. **docs/ref/contrib/gis/install/index.txt:64** - Updated GIS requirements table from "3.8.3+" to "3.9.0+"
+
+### Code Cleanup
+5. **django/db/backends/sqlite3/introspection.py:384-385** - Updated comment to reflect that SQLite 3.9.0+ always has 5 columns
+
+## Impact
+With SQLite 3.9.0+ as the minimum version, Django now guarantees support for:
+- Indexes on expressions (as mentioned in #26167)
+- SQLITE_ENABLE_JSON1 compile-time option
+- All features available in SQLite 3.9.0+
+
+The existing version-specific feature flags for SQLite versions >= 3.9.0 (like 3.15.0, 3.20.0, 3.25.0, etc.) remain as runtime checks since users may have newer SQLite versions with additional capabilities.
+
+All changes align with the rationale that SQLite 3.9.0 was released in October 2015, Ubuntu Xenial ships with 3.11.0+, and Debian Jessie (which had 3.8.7) reached EOL in June 2020.

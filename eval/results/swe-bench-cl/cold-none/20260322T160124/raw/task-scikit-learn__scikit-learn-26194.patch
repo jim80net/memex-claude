@@ -1,0 +1,63 @@
+diff --git a/sklearn/metrics/_ranking.py b/sklearn/metrics/_ranking.py
+index 0cdead9233..40105a88c3 100644
+--- a/sklearn/metrics/_ranking.py
++++ b/sklearn/metrics/_ranking.py
+@@ -1083,7 +1083,18 @@ def roc_curve(
+     # to make sure that the curve starts at (0, 0)
+     tps = np.r_[0, tps]
+     fps = np.r_[0, fps]
+-    thresholds = np.r_[thresholds[0] + 1, thresholds]
++
++    # For probability estimates (when max threshold <= 1), use a threshold
++    # slightly above 1.0 instead of thresholds[0] + 1 to avoid nonsensical
++    # thresholds > 1 when dealing with probabilities
++    if thresholds[0] <= 1.0:
++        # Use the smallest representable float greater than 1.0
++        extra_threshold = np.nextafter(1.0, 2.0)
++    else:
++        # For decision function scores, use the original logic
++        extra_threshold = thresholds[0] + 1
++
++    thresholds = np.r_[extra_threshold, thresholds]
+ 
+     if fps[-1] <= 0:
+         warnings.warn(
+diff --git a/sklearn/metrics/tests/test_ranking.py b/sklearn/metrics/tests/test_ranking.py
+index f38f118c38..0b45ea068b 100644
+--- a/sklearn/metrics/tests/test_ranking.py
++++ b/sklearn/metrics/tests/test_ranking.py
+@@ -439,6 +439,34 @@ def test_roc_curve_fpr_tpr_increasing():
+     assert (np.diff(tpr) < 0).sum() == 0
+ 
+ 
++def test_roc_curve_with_probability_estimates():
++    # Test that roc_curve thresholds stay within valid ranges for probability estimates
++    # Regression test for issue where thresholds could exceed 1 when dealing with
++    # probability estimates in [0, 1] range
++    rng = np.random.RandomState(42)
++    y_true = rng.randint(0, 2, size=10)
++    y_score = rng.rand(10)  # This generates probabilities between 0 and 1
++
++    fpr, tpr, thresholds = roc_curve(y_true, y_score)
++
++    # All thresholds should be >= 0 and <= max(1, max(y_score))
++    assert (thresholds >= 0).all(), f"Found threshold < 0: {thresholds.min()}"
++
++    # For probability estimates, thresholds should not significantly exceed 1
++    # We allow for small floating point values slightly above 1 (like np.nextafter(1.0, 2.0))
++    # but not arbitrary values like 1.9 or 2.0
++    max_expected_threshold = 1 + 1e-10  # Small tolerance for floating point precision
++    assert (thresholds <= max_expected_threshold).all(), (
++        f"Found threshold significantly > 1 for probability estimates: {thresholds.max()}"
++    )
++
++    # Verify that the ROC curve still starts at (0, 0) and ends at (1, 1)
++    assert fpr[0] == 0.0
++    assert tpr[0] == 0.0
++    assert fpr[-1] == 1.0
++    assert tpr[-1] == 1.0
++
++
+ def test_auc():
+     # Test Area Under Curve (AUC) computation
+     x = [0, 1]

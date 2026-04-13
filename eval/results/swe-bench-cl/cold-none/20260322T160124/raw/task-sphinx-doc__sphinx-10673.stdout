@@ -1,0 +1,47 @@
+## Solution Implementation Complete
+
+I've successfully implemented a solution to allow `genindex`, `modindex`, and `search` in toctrees without generating warnings. Here's what I implemented:
+
+### 📋 Changes Made
+
+**1. Added Helper Function (`sphinx/environment/__init__.py`)**
+```python
+def has_special_index_page(self, docname: str) -> bool:
+    """Check if a document name refers to a special auto-generated index page."""
+```
+This function checks:
+- `genindex`: Returns `True` if `html_use_index` config is enabled
+- `search`: Returns `True` (search is generally available)  
+- `modindex`/`py-modindex`: Returns `True` if Python domain exists and has modules
+
+**2. Modified Toctree Directive (`sphinx/directives/other.py`)**
+- Added check for special index pages before generating "nonexisting document" warnings
+- Special pages are now added to toctree entries instead of throwing warnings
+
+**3. Modified Toctree Adapter (`sphinx/environment/adapters/toctree.py`)**
+- Added check to skip warnings for special index pages during toctree resolution
+
+### 🎯 Result
+
+Users can now use this pattern without warnings:
+```rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Indices and tables
+
+   genindex 
+   modindex
+   search
+```
+
+### 🧪 Testing
+
+I created a test case (`tests/test_toctree.py::test_toctree_special_indexes`) and test fixtures to verify the solution works correctly.
+
+The implementation ensures that:
+- No warnings are generated for valid special index pages
+- The pages are properly included in toctrees when available
+- Regular document validation still works for actual missing documents
+- The solution respects configuration settings (e.g., `html_use_index`)
+
+This resolves the common Stack Overflow questions mentioned in the feature request and provides a clean way for users to include auto-generated index pages in their documentation navigation.

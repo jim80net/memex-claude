@@ -1,0 +1,164 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ddfd2b365..170f1ce91 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -11,6 +11,7 @@
+ """
+ 
+ import importlib
++import inspect
+ import re
+ import warnings
+ from inspect import Parameter, Signature
+@@ -124,6 +125,86 @@ def inherited_members_option(arg: Any) -> Union[object, Set[str]]:
+         return arg
+ 
+ 
++def check_inherited_attr_docs(obj: Any, objpath: List[str], membername: str,
++                              attr_docs: Dict[Tuple[str, str], List[str]]) -> bool:
++    """Check if an attribute has documentation in base classes.
++
++    This function checks if the given member name has attribute documentation
++    in the current class or any of its base classes. It's used to fix the issue
++    where inherited attributes don't get their documentation from base classes.
++
++    Args:
++        obj: The class object being documented
++        objpath: Path components to the current class
++        membername: Name of the attribute to check
++        attr_docs: Dictionary mapping (namespace, attrname) to documentation
++
++    Returns:
++        True if documentation is found in current class or base classes, False otherwise
++    """
++    # First check current class namespace
++    namespace = '.'.join(objpath)
++    if (namespace, membername) in attr_docs:
++        return True
++
++    # If documenting a class, check base classes
++    if inspect.isclass(obj):
++        for cls in obj.__mro__:
++            # Skip the current class as we already checked it
++            if cls == obj:
++                continue
++
++            # Construct the base class namespace
++            base_namespace = cls.__qualname__
++            if (base_namespace, membername) in attr_docs:
++                return True
++
++    return False
++
++
++def check_inherited_attr_docs_direct(parent_obj: Any, objpath: List[str],
++                                     attr_docs: Dict[Tuple[str, str], List[str]]) -> Optional[List[str]]:
++    """Check if an attribute has documentation in base classes for direct attribute documentation.
++
++    This function is used when documenting an attribute directly (e.g., autoattribute directive)
++    and checks if the attribute has documentation in the current class or any base classes.
++
++    Args:
++        parent_obj: The parent class object containing the attribute
++        objpath: Path components, where the last component is the attribute name
++        attr_docs: Dictionary mapping (namespace, attrname) to documentation
++
++    Returns:
++        List of documentation lines if found, None otherwise
++    """
++    if not objpath:
++        return None
++
++    # Extract parent class path and attribute name
++    parent_path = objpath[:-1]
++    attr_name = objpath[-1]
++
++    # First check current class namespace
++    key = ('.'.join(parent_path), attr_name)
++    if key in attr_docs:
++        return attr_docs[key]
++
++    # If parent is a class, check base classes
++    if inspect.isclass(parent_obj):
++        for cls in parent_obj.__mro__:
++            # Skip the current class as we already checked it
++            if cls == parent_obj:
++                continue
++
++            # Construct the base class namespace and check
++            base_namespace = cls.__qualname__
++            base_key = (base_namespace, attr_name)
++            if base_key in attr_docs:
++                return attr_docs[base_key]
++
++    return None
++
++
+ def member_order_option(arg: Any) -> Optional[str]:
+     """Used to convert the :members: option to auto directives."""
+     if arg is None:
+@@ -597,12 +678,13 @@ class Documenter:
+         if self.analyzer:
+             attr_docs = self.analyzer.find_attr_docs()
+             if self.objpath:
+-                key = ('.'.join(self.objpath[:-1]), self.objpath[-1])
+-                if key in attr_docs:
++                # Check for attribute documentation in current class and base classes
++                inherited_docs = check_inherited_attr_docs_direct(self.parent, self.objpath, attr_docs)
++                if inherited_docs is not None:
+                     no_docstring = True
+                     # make a copy of docstring for attributes to avoid cache
+                     # the change of autodoc-process-docstring event.
+-                    docstrings = [list(attr_docs[key])]
++                    docstrings = [list(inherited_docs)]
+ 
+                     for i, line in enumerate(self.process_doc(docstrings)):
+                         self.add_line(line, sourcename, i)
+@@ -746,7 +828,7 @@ class Documenter:
+                         keep = has_doc or self.options.undoc_members
+                 else:
+                     keep = False
+-            elif (namespace, membername) in attr_docs:
++            elif check_inherited_attr_docs(self.object, self.objpath, membername, attr_docs):
+                 if want_all and isprivate:
+                     if self.options.private_members is None:
+                         keep = False
+diff --git a/tests/test_ext_autodoc.py b/tests/test_ext_autodoc.py
+index 392ad1a68..afad31f85 100644
+--- a/tests/test_ext_autodoc.py
++++ b/tests/test_ext_autodoc.py
+@@ -2234,3 +2234,34 @@ def test_name_mangling(app):
+         '      name of Foo',
+         '',
+     ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_autodoc_inherited_attribute_docs_direct(app):
++    """Test that autoattribute works for inherited attributes."""
++    # Test direct documentation of an inherited attribute
++    actual = do_autodoc(app, 'attribute', 'target.inherited_attrs.DerivedClass.base_attr')
++    assert list(actual) == [
++        '',
++        '.. py:attribute:: DerivedClass.base_attr',
++        '   :module: target.inherited_attrs',
++        '',
++        '   This is base_attr from BaseClass',
++        '',
++    ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_autodoc_inherited_attribute_docs_class(app):
++    """Test that inherited attributes appear in class documentation with their docs."""
++    # Test that inherited attributes show up in class docs with inherited-members option
++    options = {"members": None, "inherited-members": True}
++    actual = do_autodoc(app, 'class', 'target.inherited_attrs.DerivedClass', options)
++
++    # Filter to just the attribute-related lines
++    attr_lines = [line for line in actual if 'base_attr' in line or 'This is base_attr' in line]
++
++    # Should find both the attribute declaration and its docstring
++    assert len(attr_lines) >= 2
++    assert any('base_attr' in line and 'py:attribute' in line for line in attr_lines)
++    assert any('This is base_attr from BaseClass' in line for line in attr_lines)

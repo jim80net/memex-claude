@@ -1,0 +1,170 @@
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8c..64a477bf8b 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1224,6 +1224,64 @@ class RawDataDiff(ImageDataDiff):
+         )
+ 
+ 
++def _compare_vla_elements(a, b, rtol=0.0, atol=0.0):
++    """
++    Compare two variable-length array elements robustly.
++
++    This function handles edge cases that np.allclose might not handle
++    properly for VLA data, such as empty arrays, different array structures,
++    or object array elements.
++
++    Parameters
++    ----------
++    a, b : array-like
++        The VLA elements to compare
++    rtol, atol : float
++        Relative and absolute tolerance parameters
++
++    Returns
++    -------
++    bool
++        True if the elements are considered equal, False otherwise
++    """
++    try:
++        # Handle None values
++        if a is None and b is None:
++            return True
++        if a is None or b is None:
++            return False
++
++        # Convert to numpy arrays if not already
++        a_arr = np.asarray(a)
++        b_arr = np.asarray(b)
++
++        # Check shapes first
++        if a_arr.shape != b_arr.shape:
++            return False
++
++        # Handle empty arrays
++        if a_arr.size == 0 and b_arr.size == 0:
++            return True
++        if a_arr.size == 0 or b_arr.size == 0:
++            return False
++
++        # For floating point data, use allclose
++        if np.issubdtype(a_arr.dtype, np.floating) and np.issubdtype(b_arr.dtype, np.floating):
++            return np.allclose(a_arr, b_arr, rtol=rtol, atol=atol)
++
++        # For other data types, use exact comparison
++        return np.array_equal(a_arr, b_arr)
++
++    except Exception:
++        # If any error occurs during comparison, fall back to exact equality
++        # This handles cases where the data structures are incompatible
++        try:
++            return np.array_equal(np.asarray(a), np.asarray(b))
++        except Exception:
++            # Last resort: compare as objects
++            return a == b
++
++
+ class TableDataDiff(_BaseDiff):
+     """
+     Diff two table data arrays. It doesn't matter whether the data originally
+@@ -1454,7 +1512,7 @@ class TableDataDiff(_BaseDiff):
+                     [
+                         idx
+                         for idx in range(len(arra))
+-                        if not np.allclose(
++                        if not _compare_vla_elements(
+                             arra[idx], arrb[idx], rtol=self.rtol, atol=self.atol
+                         )
+                     ],
+diff --git a/astropy/io/fits/tests/test_fitsdiff.py b/astropy/io/fits/tests/test_fitsdiff.py
+index 0753c9c353..e853b3d65d 100644
+--- a/astropy/io/fits/tests/test_fitsdiff.py
++++ b/astropy/io/fits/tests/test_fitsdiff.py
+@@ -345,3 +345,87 @@ class Test_FITSDiff(FitsTestCase):
+ 
+         with open(os.path.expanduser(self.temp("diff_report.txt"))) as f:
+             assert "Extra keyword 'TESTKEY' in b: 'testval'" in f.read()
++
++    def test_fitsdiff_vla_identical(self):
++        """
++        Test that FITSDiff correctly identifies identical files with VLA columns.
++        Regression test for issue where FITSDiff incorrectly reported differences
++        between identical files containing variable-length arrays.
++        """
++        # Create a binary table with VLA columns
++        col = fits.Column('a', format='QD', array=[[0], [0, 0]])
++        hdu = fits.BinTableHDU.from_columns([col])
++
++        tmp_file = self.temp("vla_test.fits")
++        hdu.writeto(tmp_file, overwrite=True)
++
++        # Compare file to itself - should be identical
++        diff = FITSDiff(tmp_file, tmp_file)
++        assert diff.identical, "FITSDiff should report identical files as identical, even with VLA columns"
++
++    def test_fitsdiff_vla_different(self):
++        """Test that FITSDiff correctly identifies different VLA data."""
++        # Create two tables with different VLA data
++        col1 = fits.Column('a', format='QD', array=[[0], [0, 0]])
++        col2 = fits.Column('a', format='QD', array=[[0], [1, 1]])
++        hdu1 = fits.BinTableHDU.from_columns([col1])
++        hdu2 = fits.BinTableHDU.from_columns([col2])
++
++        tmp_file1 = self.temp("vla_test1.fits")
++        tmp_file2 = self.temp("vla_test2.fits")
++        hdu1.writeto(tmp_file1, overwrite=True)
++        hdu2.writeto(tmp_file2, overwrite=True)
++
++        # Compare different files - should not be identical
++        diff = FITSDiff(tmp_file1, tmp_file2)
++        assert not diff.identical, "FITSDiff should report different VLA data as different"
++
++    def test_fitsdiff_vla_complex(self):
++        """Test FITSDiff with complex VLA structures including empty arrays."""
++        # Create a table with complex VLA data including empty arrays
++        col = fits.Column('b', format='PJ', array=[[], [1], [1, 2, 3]])
++        hdu = fits.BinTableHDU.from_columns([col])
++
++        tmp_file = self.temp("vla_complex_test.fits")
++        hdu.writeto(tmp_file, overwrite=True)
++
++        # Compare file to itself - should be identical
++        diff = FITSDiff(tmp_file, tmp_file)
++        assert diff.identical, "FITSDiff should handle complex VLA structures correctly"
++
++
++def test_compare_vla_elements():
++    """Test the _compare_vla_elements helper function."""
++    from astropy.io.fits.diff import _compare_vla_elements
++
++    # Test identical arrays
++    a1 = np.array([1, 2, 3])
++    b1 = np.array([1, 2, 3])
++    assert _compare_vla_elements(a1, b1), "Identical arrays should be equal"
++
++    # Test different arrays
++    a2 = np.array([1, 2, 3])
++    b2 = np.array([1, 2, 4])
++    assert not _compare_vla_elements(a2, b2), "Different arrays should not be equal"
++
++    # Test empty arrays
++    a3 = np.array([])
++    b3 = np.array([])
++    assert _compare_vla_elements(a3, b3), "Empty arrays should be equal"
++
++    # Test different shapes
++    a4 = np.array([1, 2])
++    b4 = np.array([[1, 2]])
++    assert not _compare_vla_elements(a4, b4), "Different shapes should not be equal"
++
++    # Test None values
++    assert _compare_vla_elements(None, None), "None values should be equal"
++    assert not _compare_vla_elements(np.array([1]), None), "Array and None should not be equal"
++
++    # Test floating point with tolerance
++    a5 = np.array([1.0, 2.0, 3.0])
++    b5 = np.array([1.0, 2.0, 3.000001])
++    assert not _compare_vla_elements(a5, b5, rtol=0.0, atol=0.0), \
++        "Small differences should be detected with zero tolerance"
++    assert _compare_vla_elements(a5, b5, rtol=0.0, atol=1e-5), \
++        "Small differences should be ignored with appropriate tolerance"

@@ -5,7 +5,8 @@
       "Bash(pnpm tsc:*)",
       "Bash(pnpm vitest:*)",
       "Bash(node:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

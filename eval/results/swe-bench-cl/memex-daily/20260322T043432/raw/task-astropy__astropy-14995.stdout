@@ -1,0 +1,33 @@
+## Summary
+
+I successfully identified and fixed the mask propagation bug in astropy v5.3's NDDataRef class. Here's what was accomplished:
+
+### 🐛 **Bug Identified**
+The issue was in the `_arithmetic_mask` method in `astropy/nddata/mixins/ndarithmetic.py:525-527`. The method had incomplete logic that didn't handle the case where `self.mask` exists but `operand.mask` is None, causing it to pass None to `handle_mask` functions like `np.bitwise_or`.
+
+### ✅ **Fix Applied**
+Added a missing condition to properly handle when only one operand has a mask:
+
+```python
+elif operand is not None and operand.mask is None:
+    # operand has no mask, but self does - return self.mask
+    return deepcopy(self.mask)
+```
+
+### 📋 **What This Fixes**
+The bug occurred when:
+- One NDDataRef has a mask, the other doesn't
+- Using `handle_mask=np.bitwise_or` (or other bitwise operations)
+- Operations like `nref_mask.multiply(1., handle_mask=np.bitwise_or)` would fail with TypeError
+
+### 🧪 **Testing**
+- Created regression tests that reproduce the exact bug scenario
+- Verified the fix works for all arithmetic operations (add, subtract, multiply, divide) 
+- Confirmed backward compatibility with existing test suite
+
+### 📁 **Files Modified**
+- **`astropy/nddata/mixins/ndarithmetic.py`** - Fixed the `_arithmetic_mask` method
+- **`test_mask_bug_regression.py`** - Comprehensive regression test
+- **`MASK_PROPAGATION_BUG_FIX.md`** - Documentation of the fix
+
+The fix is minimal, targeted, and fully backward compatible. The original error cases from the issue report now work correctly, returning the appropriate mask instead of failing with a TypeError.

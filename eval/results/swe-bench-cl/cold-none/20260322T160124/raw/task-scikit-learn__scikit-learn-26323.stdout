@@ -1,0 +1,47 @@
+## Fix Summary
+
+I've successfully identified and fixed the bug where `ColumnTransformer.set_output` ignores the `remainder` parameter when it's an estimator. Here's what was implemented:
+
+### The Bug
+The issue was in `sklearn/compose/_column_transformer.py:275-306`. The `set_output` method only applied output configuration to transformers in `self.transformers` and `self.transformers_`, but ignored `self.remainder` when it was an estimator (not 'drop' or 'passthrough').
+
+### The Fix
+**File**: `sklearn/compose/_column_transformer.py`
+
+Added 3 lines after the existing transformer loop:
+
+```python
+# Also set output for remainder if it's an estimator
+if self.remainder not in {"drop", "passthrough"}:
+    _safe_set_output(self.remainder, transform=transform)
+```
+
+This ensures that when `remainder` is an estimator, it also receives the `set_output` configuration.
+
+### Test Coverage
+**File**: `sklearn/compose/tests/test_column_transformer.py`
+
+1. **Import added**: `from sklearn.feature_selection import VarianceThreshold`
+2. **New test function**: `test_column_transformer_set_output_remainder_estimator()`
+
+The test verifies:
+- Remainder estimators receive `set_output` configuration 
+- Output format is consistent with explicit transformers
+- Mixed data types (boolean/numeric) are handled correctly
+
+### Verification
+The fix ensures the original bug report example now works correctly:
+
+```python
+# Before fix: This would output mixed types causing issues
+ct = make_column_transformer(
+    (VarianceThreshold(), make_column_selector(dtype_include=bool)),
+    remainder=VarianceThreshold(),
+    verbose_feature_names_out=False,
+).set_output(transform="pandas")
+
+# After fix: Properly outputs pandas DataFrame with correct dtypes
+result = ct.fit_transform(df)  # ✓ Now works as expected
+```
+
+The fix is minimal, targeted, and maintains backward compatibility while resolving the issue described in the bug report.

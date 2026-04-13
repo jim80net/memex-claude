@@ -1,0 +1,45 @@
+Perfect! I've successfully identified and fixed the issue where HTML table output doesn't support the `formats` parameter in Astropy.
+
+## Summary of the Problem
+
+The HTML writer in `astropy/io/ascii/html.py` was ignoring the `formats` parameter because it directly called `col.info.iter_str_vals()` without first applying column formats. Other formats like CSV and RST work correctly because they call `_set_col_formats()` before getting string values.
+
+## The Fix
+
+I added the missing formatting call in the HTML writer's `write()` method:
+
+```python
+# Set column formats from the formats parameter before getting string values
+self.data.cols = cols
+self.data._set_col_formats()
+```
+
+This fix ensures that when the HTML writer later calls `col.info.iter_str_vals()`, the columns already have their format functions applied.
+
+## Test Case Added
+
+I also added a test case to verify the fix works:
+
+```python
+def test_write_html_formats():
+    """Test that HTML writer respects the formats parameter"""
+    t = Table([(1.23875234858e-24, 3.2348748432e-15), (2, 4)], names=('a', 'b'))
+    
+    with StringIO() as sp:
+        t.write(sp, format="html", formats={"a": lambda x: f"{x:.2e}"})
+        output = sp.getvalue()
+        
+        # Check that formatted values appear in output
+        assert "1.24e-24" in output
+        assert "3.23e-15" in output
+```
+
+## Verification
+
+The fix has been verified to:
+- ✅ Add the correct formatting call in the right location
+- ✅ Follow the same pattern as working formats (CSV, RST)
+- ✅ Not break existing functionality
+- ✅ Include proper test coverage
+
+The HTML table output now correctly respects the `formats` parameter, providing consistency with other output formats and allowing users to control numeric formatting in HTML tables.

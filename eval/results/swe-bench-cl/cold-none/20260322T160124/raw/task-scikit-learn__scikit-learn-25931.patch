@@ -1,0 +1,66 @@
+diff --git a/sklearn/ensemble/_iforest.py b/sklearn/ensemble/_iforest.py
+index 4d6c1c3f0b..1c428952d6 100644
+--- a/sklearn/ensemble/_iforest.py
++++ b/sklearn/ensemble/_iforest.py
+@@ -345,7 +345,11 @@ class IsolationForest(OutlierMixin, BaseBagging):
+             return self
+ 
+         # else, define offset_ wrt contamination parameter
+-        self.offset_ = np.percentile(self.score_samples(X), 100.0 * self.contamination)
++        # Use internal scoring to avoid feature name validation warnings
++        # since X is the same data that was just validated in fit()
++        X_for_scoring = check_array(X, accept_sparse="csr", dtype=np.float32)
++        scores = -self._compute_chunked_score_samples(X_for_scoring)
++        self.offset_ = np.percentile(scores, 100.0 * self.contamination)
+ 
+         return self
+ 
+diff --git a/sklearn/ensemble/tests/test_iforest.py b/sklearn/ensemble/tests/test_iforest.py
+index 5f046540ff..804f478237 100644
+--- a/sklearn/ensemble/tests/test_iforest.py
++++ b/sklearn/ensemble/tests/test_iforest.py
+@@ -27,6 +27,8 @@ from sklearn.metrics import roc_auc_score
+ from scipy.sparse import csc_matrix, csr_matrix
+ from unittest.mock import Mock, patch
+ 
++pd = pytest.importorskip("pandas")
++
+ 
+ # load iris & diabetes dataset
+ iris = load_iris()
+@@ -339,3 +341,35 @@ def test_base_estimator_property_deprecated():
+     )
+     with pytest.warns(FutureWarning, match=warn_msg):
+         model.base_estimator_
++
++
++def test_iforest_no_feature_names_warning_with_contamination():
++    """Test that IsolationForest does not warn about feature names during fit.
++
++    Non-regression test for issue where using contamination != "auto" with
++    DataFrame input would trigger inappropriate feature name validation warnings.
++    """
++    # Create a DataFrame with feature names
++    X = pd.DataFrame({"feature_a": [-1.1, 0.3, 0.5, 100]})
++
++    # This should not produce any feature name warnings
++    with warnings.catch_warnings():
++        warnings.simplefilter("error")  # Convert warnings to exceptions
++
++        # Test with contamination='auto' (should work fine)
++        clf_auto = IsolationForest(random_state=0, contamination="auto")
++        clf_auto.fit(X)
++
++        # Test with custom contamination (this was triggering the bug)
++        clf_custom = IsolationForest(random_state=0, contamination=0.25)
++        clf_custom.fit(X)
++
++        # Both should work without warnings
++        assert hasattr(clf_auto, "offset_")
++        assert hasattr(clf_custom, "offset_")
++
++        # Verify the feature names were properly stored
++        assert hasattr(clf_auto, "feature_names_in_")
++        assert hasattr(clf_custom, "feature_names_in_")
++        assert clf_auto.feature_names_in_[0] == "feature_a"
++        assert clf_custom.feature_names_in_[0] == "feature_a"

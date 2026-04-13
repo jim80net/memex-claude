@@ -1,0 +1,79 @@
+## Summary: Type Alias Docstring Bug Analysis and Fix
+
+I've successfully investigated and fixed the inconsistent behavior with type alias documentation in Sphinx's autodoc extension. Here's a comprehensive report:
+
+### Root Cause Analysis
+
+**The Problem:**
+The user reported that multiline docstrings for type aliases (using `"""` syntax) were inconsistently displayed. Sometimes only the "alias of ..." text was shown, while the actual docstring was suppressed.
+
+**Root Cause:**
+1. **Documenter Selection Issue**: Generic type aliases like `Dict[str, Any]` were being handled by `ClassDocumenter` instead of `DataDocumenter` in some cases
+2. **Priority Conflict**: `ClassDocumenter` has higher priority (0) than `DataDocumenter` (-10) 
+3. **Incorrect Logic**: `ClassDocumenter.can_document_member()` returned `True` for `isinstance(member, type)`, which could include generic aliases depending on the Python version
+4. **Docstring Suppression**: When `ClassDocumenter` handled a type alias, it set `doc_as_attr = True` (because the alias name ≠ `obj.__name__`), which suppressed the docstring via `get_doc()` returning `None`
+
+### Key Findings
+
+1. **Comment-style vs Multiline Docstrings**: The existing tests used `#: comment` style docstrings, which work through the attribute documentation system (`attr_docs`), not the regular docstring system
+2. **Different Code Paths**: Comment-style (`#:`) and multiline (`"""`) docstrings are processed through completely different mechanisms
+3. **The Fix Point**: The issue was in `ClassDocumenter.can_document_member()` method at `/eval/workdir/sphinx-doc_sphinx/sphinx/ext/autodoc/__init__.py:1457-1460`
+
+### Implemented Fix
+
+**File:** `sphinx/ext/autodoc/__init__.py`
+**Location:** `ClassDocumenter.can_document_member()` method
+
+**Change:**
+```python
+@classmethod
+def can_document_member(cls, member: Any, membername: str, isattr: bool, parent: Any
+                        ) -> bool:
+    # Generic aliases should be documented as data, not classes
+    if inspect.isgenericalias(member):
+        return False
+    return isinstance(member, type)
+```
+
+**Rationale:**
+- Prevents `ClassDocumenter` from handling generic type aliases
+- Allows `DataDocumenter` to handle them instead
+- `DataDocumenter` properly processes both docstrings AND alias information
+- Uses Sphinx's existing `inspect.isgenericalias()` function for reliable detection
+
+### Test Cases Created
+
+**Test Target File:** `tests/roots/test-ext-autodoc/target/test_type_alias_docstrings.py`
+- Contains user's exact reproduction case with multiline docstrings
+- Includes various type alias patterns: `Dict`, `Union`, `Callable`
+
+**Test Cases:** Added to `tests/test_ext_autodoc_autodata.py`:
+- `test_autodata_type_alias_multiline_docstring()` 
+- `test_autodata_type_alias_union_multiline_docstring()`
+- `test_autodata_type_alias_callable_multiline_docstring()`
+
+**Expected Behavior:**
+```
+'   Dictionary with PyScaffold\'s options.',
+'   Should be treated as immutable (if required, copy before changing).',
+'',
+'   Please notice some behaviours given by the options **SHOULD** be observed.',
+'',
+'   alias of :class:`~typing.Dict`\\ [:class:`str`, :class:`~typing.Any`]',
+```
+
+### Benefits of This Fix
+
+1. **Consistent Behavior**: Both comment-style and multiline docstrings now work consistently
+2. **Preserves Existing Functionality**: Comment-style docstrings continue to work as before
+3. **Backward Compatible**: No breaking changes to existing behavior
+4. **Future-Proof**: Uses Sphinx's official generic alias detection method
+5. **Complete Documentation**: Shows both the custom docstring AND the "alias of ..." information
+
+### Files Modified
+
+1. **`sphinx/ext/autodoc/__init__.py`** - Main fix implementation
+2. **`tests/roots/test-ext-autodoc/target/test_type_alias_docstrings.py`** - Test target (new file)
+3. **`tests/test_ext_autodoc_autodata.py`** - Test cases (added 3 new tests)
+
+This fix resolves the inconsistent behavior reported in the issue and ensures that type aliases with multiline docstrings are properly documented with both their custom docstrings and alias information.

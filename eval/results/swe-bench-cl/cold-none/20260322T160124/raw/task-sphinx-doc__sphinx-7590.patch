@@ -1,0 +1,113 @@
+diff --git a/sphinx/domains/cpp.py b/sphinx/domains/cpp.py
+index fe52d881d..d0929a888 100644
+--- a/sphinx/domains/cpp.py
++++ b/sphinx/domains/cpp.py
+@@ -882,6 +882,23 @@ class ASTCharLiteral(ASTLiteral):
+         signode.append(nodes.Text(txt, txt))
+ 
+ 
++class ASTUserDefinedLiteral(ASTLiteral):
++    def __init__(self, literal_value: str, suffix: str) -> None:
++        self.literal_value = literal_value
++        self.suffix = suffix
++
++    def _stringify(self, transform: StringifyTransform) -> str:
++        return self.literal_value + self.suffix
++
++    def get_id(self, version: int) -> str:
++        return "L%s_%sE" % (self.literal_value, self.suffix)
++
++    def describe_signature(self, signode: TextElement, mode: str,
++                           env: "BuildEnvironment", symbol: "Symbol") -> None:
++        txt = str(self)
++        signode.append(nodes.Text(txt, txt))
++
++
+ class ASTThisLiteral(ASTExpression):
+     def _stringify(self, transform: StringifyTransform) -> str:
+         return "this"
+@@ -4658,31 +4675,50 @@ class DefinitionParser(BaseParser):
+             return ASTBooleanLiteral(True)
+         if self.skip_word('false'):
+             return ASTBooleanLiteral(False)
+-        for regex in [float_literal_re, binary_literal_re, hex_literal_re,
++        for regex in [binary_literal_re, hex_literal_re, float_literal_re,
+                       integer_literal_re, octal_literal_re]:
+             pos = self.pos
+             if self.match(regex):
++                # Handle standard suffixes
+                 while self.current_char in 'uUlLfF':
+                     self.pos += 1
+-                return ASTNumberLiteral(self.definition[pos:self.pos])
++                literal_with_standard_suffix = self.definition[pos:self.pos]
++
++                # Check for user-defined literal suffix
++                if self.match(identifier_re):
++                    suffix = self.matched_text
++                    return ASTUserDefinedLiteral(literal_with_standard_suffix, suffix)
++                else:
++                    return ASTNumberLiteral(literal_with_standard_suffix)
+ 
+         string = self._parse_string()
+         if string is not None:
+-            return ASTStringLiteral(string)
++            # Check for user-defined literal suffix after string
++            if self.match(identifier_re):
++                suffix = self.matched_text
++                return ASTUserDefinedLiteral(string, suffix)
++            else:
++                return ASTStringLiteral(string)
+ 
+         # character-literal
+         if self.match(char_literal_re):
+             prefix = self.last_match.group(1)  # may be None when no prefix
+             data = self.last_match.group(2)
+-            try:
+-                return ASTCharLiteral(prefix, data)
+-            except UnicodeDecodeError as e:
+-                self.fail("Can not handle character literal. Internal error was: %s" % e)
+-            except UnsupportedMultiCharacterCharLiteral:
+-                self.fail("Can not handle character literal"
+-                          " resulting in multiple decoded characters.")
+-
+-        # TODO: user-defined lit
++            char_literal_text = self.matched_text
++
++            # Check for user-defined literal suffix after character literal
++            if self.match(identifier_re):
++                suffix = self.matched_text
++                return ASTUserDefinedLiteral(char_literal_text, suffix)
++            else:
++                try:
++                    return ASTCharLiteral(prefix, data)
++                except UnicodeDecodeError as e:
++                    self.fail("Can not handle character literal. Internal error was: %s" % e)
++                except UnsupportedMultiCharacterCharLiteral:
++                    self.fail("Can not handle character literal"
++                              " resulting in multiple decoded characters.")
++
+         return None
+ 
+     def _parse_fold_or_paren_expression(self) -> ASTExpression:
+diff --git a/tests/test_domain_cpp.py b/tests/test_domain_cpp.py
+index 9db741ae5..ad1ef894d 100644
+--- a/tests/test_domain_cpp.py
++++ b/tests/test_domain_cpp.py
+@@ -176,7 +176,16 @@ def test_expressions():
+         exprCheck(p + "'\\U0001f34c'", t + "127820")
+         exprCheck(p + "'\\U0001F34C'", t + "127820")
+ 
+-    # TODO: user-defined lit
++    # user-defined literals
++    exprCheck('42_m', 'L42_mE')
++    exprCheck('3.14_s', 'L3.14_sE')
++    exprCheck('6.62607015e-34q_J', 'L6.62607015e-34q_JE')
++    exprCheck('1q_s', 'L1q_sE')
++    exprCheck('0x1234_custom', 'L0x1234_customE')
++    exprCheck('0b1010_binary', 'L0b1010_binaryE')
++    exprCheck('100UL_kg', 'L100UL_kgE')
++    exprCheck('"hello"_mystring', 'L"hello"_mystringE')
++    exprCheck("'x'_mychar", "L'x'_mycharE")
+     exprCheck('(... + Ns)', '(... + Ns)', id4='flpl2Ns')
+     exprCheck('(Ns + ...)', '(Ns + ...)', id4='frpl2Ns')
+     exprCheck('(Ns + ... + 0)', '(Ns + ... + 0)', id4='fLpl2NsL0E')

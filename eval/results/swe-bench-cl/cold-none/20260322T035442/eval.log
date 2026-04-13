@@ -1,0 +1,16 @@
+/home/jim/.pyenv/versions/3.10.10/lib/python3.10/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (1.26.15) or chardet (7.2.0)/charset_normalizer (3.1.0) doesn't match a supported version!
+  warnings.warn(
+/home/jim/.pyenv/versions/3.10.10/lib/python3.10/runpy.py:126: RuntimeWarning: 'swebench.harness.run_evaluation' found in sys.modules after import of package 'swebench.harness', but prior to execution of 'swebench.harness.run_evaluation'; this may result in unpredictable behaviour
+  warn(RuntimeWarning(msg))
+usage: run_evaluation.py [-h] [-d DATASET_NAME] [-s SPLIT]
+                         [-i INSTANCE_IDS [INSTANCE_IDS ...]] -p
+                         PREDICTIONS_PATH [--max_workers MAX_WORKERS]
+                         [--open_file_limit OPEN_FILE_LIMIT] [-t TIMEOUT]
+                         [--force_rebuild FORCE_REBUILD]
+                         [--cache_level {none,base,env,instance}]
+                         [--clean CLEAN] -id RUN_ID [-n NAMESPACE]
+                         [--instance_image_tag INSTANCE_IMAGE_TAG]
+                         [--env_image_tag ENV_IMAGE_TAG]
+                         [--rewrite_reports REWRITE_REPORTS]
+                         [--report_dir REPORT_DIR] [--modal MODAL]
+run_evaluation.py: error: the following arguments are required: -id/--run_id

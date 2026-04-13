@@ -1,0 +1,46 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 620f32f8..b89792fb 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -365,7 +365,7 @@ class DataVariables(Mapping[Any, "DataArray"]):
+         )
+ 
+     def __len__(self) -> int:
+-        return len(self._dataset._variables) - len(self._dataset._coord_names)
++        return sum(1 for key in self._dataset._variables if key not in self._dataset._coord_names)
+ 
+     def __contains__(self, key: Hashable) -> bool:
+         return key in self._dataset._variables and key not in self._dataset._coord_names
+diff --git a/xarray/tests/test_dataset.py b/xarray/tests/test_dataset.py
+index fc2806c7..23661c39 100644
+--- a/xarray/tests/test_dataset.py
++++ b/xarray/tests/test_dataset.py
+@@ -3260,6 +3260,28 @@ class TestDataset:
+         assert_identical(obj, ds, check_default_indexes=False)
+         assert len(obj.xindexes) == 0
+ 
++    def test_data_vars_len_after_index_operations(self) -> None:
++        """Test that DataVariables.__len__ works correctly after index operations.
++
++        Regression test for issue where reset_index(drop=True) could create a state
++        where _coord_names has more entries than _variables, causing __len__ to
++        return a negative value.
++        """
++        # Create a dataset with coordinates
++        ds = Dataset(coords={"a": ("x", [1, 2, 3]), "b": ("x", ['a', 'b', 'c'])})
++
++        # This operation can create more coord_names than variables
++        result = ds.set_index(z=['a', 'b']).reset_index("z", drop=True)
++
++        # The bug would cause len(result.data_vars) to raise ValueError: __len__() should return >= 0
++        # The fix ensures it returns the correct count (0 in this case)
++        assert len(result.data_vars) == 0
++        assert list(result.data_vars) == []
++
++        # Also test that the representation works (this was mentioned in the bug report)
++        repr_str = repr(result.data_vars)
++        assert "Data variables:" in repr_str
++
+     def test_reorder_levels(self) -> None:
+         ds = create_test_multiindex()
+         mindex = ds["x"].to_index()

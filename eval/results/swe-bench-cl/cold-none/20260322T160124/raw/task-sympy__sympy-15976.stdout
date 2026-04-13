@@ -1,0 +1,52 @@
+## Summary
+
+I've successfully identified and fixed the MathML printing issue where symbols ending with numbers (like `x2`) were made invisible in browsers. Here's what I found and fixed:
+
+### Root Cause
+The issue was in the `_print_Symbol` method in `/eval/workdir/sympy_sympy/sympy/printing/mathml.py`. The method was generating **invalid MathML structure** by wrapping subscript elements (`<msub>`) inside identifier elements (`<mi>`):
+
+```xml
+<!-- INVALID (old structure) -->
+<mi>
+  <msub>
+    <mi>x</mi>
+    <mi>2</mi>
+  </msub>
+</mi>
+```
+
+This structure violates MathML standards because `<mi>` elements should only contain text content, not other MathML elements.
+
+### The Fix
+I modified the `_print_Symbol` method to return the subscript/superscript elements directly without wrapping them in an `<mi>` element:
+
+```xml
+<!-- VALID (new structure) -->
+<msub>
+  <mi>x</mi>
+  <mi>2</mi>
+</msub>
+```
+
+### Key Changes Made
+
+1. **Fixed the MathML structure** in `sympy/printing/mathml.py`:
+   - Removed the outer `<mi>` wrapper for symbols with subscripts/superscripts
+   - Return `msub`, `msup`, or `msubsup` elements directly
+   - Moved the bold styling to the base symbol element (`mname`)
+
+2. **Updated the test cases** in `sympy/printing/tests/test_mathml.py`:
+   - Fixed existing tests that expected the incorrect structure
+   - Added a new test specifically for symbols ending with numbers (`x2`)
+
+3. **Verified the fix** with comprehensive testing:
+   - Created test scripts to demonstrate the before/after structures
+   - Generated an HTML file for browser verification
+
+### Results
+- **Before:** Symbols like `x2` rendered as invisible or incorrectly displayed
+- **After:** Symbols like `x2` render correctly as `x` with subscript `2`
+- **Backwards compatibility:** Simple symbols (like `x`) continue to work correctly
+- **Standard compliance:** Generated MathML now follows proper standards
+
+The fix resolves the specific issue reported while maintaining compatibility with existing functionality. Symbols ending with numbers will now be properly visible when rendered in MathML-compliant browsers like Safari.

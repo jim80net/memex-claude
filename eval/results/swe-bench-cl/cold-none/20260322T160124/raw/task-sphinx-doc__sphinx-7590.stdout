@@ -1,0 +1,79 @@
+I have successfully implemented support for C++ User Defined Literals (UDLs) in Sphinx's C++ domain parser! Here's a summary of what I accomplished:
+
+## Changes Made
+
+### 1. **Created ASTUserDefinedLiteral Class** ✅
+Added a new AST class at `sphinx/domains/cpp.py:885` to represent user-defined literals:
+
+```python
+class ASTUserDefinedLiteral(ASTLiteral):
+    def __init__(self, literal_value: str, suffix: str) -> None:
+        self.literal_value = literal_value
+        self.suffix = suffix
+
+    def _stringify(self, transform: StringifyTransform) -> str:
+        return self.literal_value + self.suffix
+
+    def get_id(self, version: int) -> str:
+        return "L%s_%sE" % (self.literal_value, self.suffix)
+
+    def describe_signature(self, signode: TextElement, mode: str,
+                           env: "BuildEnvironment", symbol: "Symbol") -> None:
+        txt = str(self)
+        signode.append(nodes.Text(txt, txt))
+```
+
+### 2. **Modified _parse_literal Function** ✅
+Enhanced the literal parsing logic to detect and handle UDL suffixes for:
+- **Number literals** (integers, floats, hex, binary, octal)
+- **String literals** 
+- **Character literals**
+
+The parser now:
+1. Parses the base literal (number, string, or character)
+2. Handles standard C++ suffixes (`u`, `U`, `l`, `L`, `f`, `F`)
+3. Checks for a user-defined identifier suffix
+4. Creates `ASTUserDefinedLiteral` if a UDL suffix is found, otherwise creates the standard literal type
+
+### 3. **Updated Regex Pattern Order** ✅
+Fixed the literal regex matching order to prioritize more specific patterns (binary, hex) before general patterns (float).
+
+### 4. **Added Test Cases** ✅
+Updated the existing test file `tests/test_domain_cpp.py` to include UDL test cases, replacing the `TODO: user-defined lit` comment with comprehensive tests.
+
+## Supported UDL Examples
+
+Your original example should now work:
+
+```cpp
+namespace units::si {
+    inline constexpr auto planck_constant = 6.62607015e-34q_J * 1q_s;
+}
+```
+
+Additional supported cases:
+- `42_m` - Integer with UDL suffix
+- `3.14_s` - Float with UDL suffix  
+- `0x1234_custom` - Hex with UDL suffix
+- `0b1010_binary` - Binary with UDL suffix
+- `100UL_kg` - Standard suffix + UDL suffix
+- `"hello"_mystring` - String with UDL suffix
+- `'x'_mychar` - Character with UDL suffix
+
+## Implementation Details
+
+The implementation correctly handles the C++11 user-defined literal syntax where:
+- The suffix must be a valid C++ identifier
+- UDL suffixes can follow standard C++ literal suffixes
+- All literal types (numeric, string, character) support UDL suffixes
+
+The parser will no longer generate the error:
+```
+WARNING: Invalid definition: Expected end of definition. [error at 58]
+  constexpr auto units::si::planck_constant = 6.62607015e-34q_J * 1q_s
+  ----------------------------------------------------------^
+```
+
+Instead, it will correctly parse `6.62607015e-34q_J` as a user-defined literal with base value `6.62607015e-34` and suffix `q_J`.
+
+Your feature request has been implemented and C++ User Defined Literals are now supported in Sphinx's C++ domain! 🎉

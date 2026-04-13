@@ -1,0 +1,51 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 4b6150f4ac..1f51fe4835 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -69,7 +69,7 @@ def is_fits(origin, filepath, fileobj, *args, **kwargs):
+             (".fits", ".fits.gz", ".fit", ".fit.gz", ".fts", ".fts.gz")
+         ):
+             return True
+-    return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++    return len(args) > 0 and isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
+ 
+ 
+ def _decode_mixins(tbl):
+diff --git a/astropy/io/fits/tests/test_connect.py b/astropy/io/fits/tests/test_connect.py
+index c5c31033f3..f6ca92a3cd 100644
+--- a/astropy/io/fits/tests/test_connect.py
++++ b/astropy/io/fits/tests/test_connect.py
+@@ -1002,3 +1002,33 @@ def test_meta_not_modified(tmp_path):
+     t.write(filename)
+     assert len(t.meta) == 1
+     assert t.meta["comments"] == ["a", "b"]
++
++
++def test_is_fits_with_empty_args():
++    """Test that is_fits doesn't crash with empty args for non-FITS files.
++
++    This is a regression test for issue where is_fits() would raise
++    IndexError: tuple index out of range when called with empty args
++    for files without FITS extensions.
++
++    See: https://github.com/astropy/astropy/commit/2a0c5c6f5b982a76615c544854cd6e7d35c67c7f
++    """
++    from astropy.io.fits.connect import is_fits
++
++    # This should not raise IndexError and should return False
++    # since it's not a FITS file and no HDU objects are provided in args
++    assert is_fits("write", "test.ecsv", None) is False
++    assert is_fits("read", "test.csv", None) is False
++    assert is_fits("write", "test.txt", None) is False
++
++    # Test with FITS extensions - should return True regardless of args
++    assert is_fits("write", "test.fits", None) is True
++    assert is_fits("write", "test.fit", None) is True
++    assert is_fits("write", "test.fits.gz", None) is True
++
++    # Test with HDU objects in args - should return True
++    hdu = BinTableHDU()
++    assert is_fits("write", "test.txt", None, hdu) is True
++
++    # Test with non-HDU objects in args - should return False
++    assert is_fits("write", "test.txt", None, "not_an_hdu") is False

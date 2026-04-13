@@ -1,0 +1,56 @@
+## Summary
+
+I've successfully identified and fixed the misleading AttributeError message issue in SkyCoord subclassing. Here's what was accomplished:
+
+### 🐛 **Issue Identified**
+The problem occurred when subclassing `SkyCoord` with custom properties that access non-existent attributes. Instead of showing the correct error message about the missing attribute, Python would show a misleading message claiming the property itself doesn't exist.
+
+### ✅ **Root Cause Found**
+The issue was in `SkyCoord.__getattr__()` (astropy/coordinates/sky_coordinate.py:869). When a property method raises an AttributeError, Python's attribute resolution mechanism incorrectly interprets this as the property itself not existing.
+
+### 🔧 **Fix Implemented**
+Modified the `__getattr__` method to check if the requested attribute is defined on the class before handling it. This prevents interference with property-based attribute access:
+
+```python
+# Check if this attribute is defined on the class (e.g., as a property).
+# If so, __getattr__ was likely called from within that property/method,
+# and we should not interfere with the normal attribute resolution.
+for cls in type(self).__mro__:
+    if attr in cls.__dict__:
+        # The attribute exists on the class - let normal resolution handle it
+        try:
+            return object.__getattribute__(self, attr)
+        except AttributeError:
+            # Re-raise the original AttributeError to preserve context
+            raise
+```
+
+### 🧪 **Test Added**
+Added `test_subclass_property_attribute_error()` to the test suite to prevent regression.
+
+### ✨ **Result**
+Now when you run your original code:
+
+```python
+import astropy.coordinates as coord
+
+class custom_coord(coord.SkyCoord):
+    @property
+    def prop(self):
+        return self.random_attr
+
+c = custom_coord('00h42m30s', '+41d12m00s', frame='icrs')
+c.prop
+```
+
+Instead of the misleading:
+```
+AttributeError: 'custom_coord' object has no attribute 'prop'
+```
+
+You'll get the correct:
+```
+AttributeError: 'custom_coord' object has no attribute 'random_attr'
+```
+
+The fix preserves all existing SkyCoord functionality while providing accurate error messages for subclass properties.

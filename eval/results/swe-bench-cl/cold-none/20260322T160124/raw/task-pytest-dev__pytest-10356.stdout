@@ -1,0 +1,55 @@
+## Summary
+
+I've successfully implemented a fix for the pytest marker inheritance issue with multiple inheritance. Here's what was accomplished:
+
+### Problem
+When using pytest markers in two base classes `Foo` and `Bar`, inheriting from both (`class TestDings(Foo, Bar)`) would lose the markers from one of those classes due to Python's Method Resolution Order (MRO). Only the first marker in the MRO was being collected.
+
+### Solution
+Modified the `get_unpacked_marks` function in `/eval/workdir/pytest-dev_pytest/src/_pytest/mark/structures.py` to:
+
+1. **Traverse the full MRO** for classes instead of only checking the direct `pytestmark` attribute
+2. **Check each class's `__dict__` directly** to avoid inheritance conflicts and prevent duplicates  
+3. **Maintain backward compatibility** for single inheritance and function marks
+
+### Key Changes
+```python
+def get_unpacked_marks(obj: object) -> Iterable[Mark]:
+    """Obtain the unpacked marks that are stored on an object."""
+    all_marks = []
+
+    # For classes, traverse the MRO to collect marks from all parent classes
+    if inspect.isclass(obj):
+        for cls in obj.__mro__:
+            # Only check for marks directly defined on this class
+            if "pytestmark" in cls.__dict__:
+                mark_list = cls.__dict__["pytestmark"]
+                if not isinstance(mark_list, list):
+                    mark_list = [mark_list]
+                all_marks.extend(mark_list)
+    else:
+        # For functions and other objects, use the direct attribute
+        mark_list = getattr(obj, "pytestmark", [])
+        if not isinstance(mark_list, list):
+            mark_list = [mark_list]
+        all_marks.extend(mark_list)
+
+    return normalize_mark_list(all_marks)
+```
+
+### Test Added
+Added a comprehensive test case in `/eval/workdir/pytest-dev_pytest/testing/test_mark.py`:
+
+```python
+def test_mark_decorator_multiple_inheritance(self, pytester: Pytester) -> None:
+    """Test that marks from multiple inheritance are properly collected."""
+    # Tests various multiple inheritance scenarios
+```
+
+### Results
+- ✅ **Before fix**: `TestDings(Foo, Bar)` would only get `foo` marker
+- ✅ **After fix**: `TestDings(Foo, Bar)` now gets both `foo` and `bar` markers
+- ✅ **Backward compatibility**: Single inheritance and function marks work exactly as before
+- ✅ **No duplicates**: Using `__dict__` prevents duplicate marks from being collected
+
+The fix resolves the issue described where markers from multiple base classes were being lost, while maintaining full compatibility with existing pytest functionality.

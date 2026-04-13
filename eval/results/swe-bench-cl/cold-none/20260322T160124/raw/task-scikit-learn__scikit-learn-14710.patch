@@ -1,0 +1,95 @@
+diff --git a/sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py b/sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py
+index ad6a5a8ca3..8baaa04417 100644
+--- a/sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py
++++ b/sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py
+@@ -426,11 +426,18 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
+ 
+         Scores are computed on validation data or on training data.
+         """
++        # For classification, decode y from integers back to original classes
++        # so they match the format of self.predict() output
++        if hasattr(self, 'classes_'):
++            y_small_train = self.classes_[y_small_train.astype(int)]
++
+         self.train_score_.append(
+             self.scorer_(self, X_binned_small_train, y_small_train)
+         )
+ 
+         if self._use_validation_data:
++            if hasattr(self, 'classes_'):
++                y_val = self.classes_[y_val.astype(int)]
+             self.validation_score_.append(
+                 self.scorer_(self, X_binned_val, y_val)
+             )
+diff --git a/sklearn/ensemble/_hist_gradient_boosting/tests/test_gradient_boosting.py b/sklearn/ensemble/_hist_gradient_boosting/tests/test_gradient_boosting.py
+index 1eebdefd52..f34b66354f 100644
+--- a/sklearn/ensemble/_hist_gradient_boosting/tests/test_gradient_boosting.py
++++ b/sklearn/ensemble/_hist_gradient_boosting/tests/test_gradient_boosting.py
+@@ -415,3 +415,67 @@ def test_infinite_values_missing_values():
+ 
+     assert stump_clf.fit(X, y_isinf).score(X, y_isinf) == 1
+     assert stump_clf.fit(X, y_isnan).score(X, y_isnan) == 1
++
++
++def test_string_target_early_stopping():
++    # Test for issue where string targets with early stopping caused TypeError
++    # due to comparing integer-encoded y_true with string y_pred in scorer.
++    # See: https://github.com/scikit-learn/scikit-learn/issues/...
++
++    rng = np.random.RandomState(0)
++    X = rng.randn(100, 10)
++    y = np.array(['class_x'] * 50 + ['class_y'] * 50, dtype=object)
++
++    # This should not raise a TypeError
++    gbrt = HistGradientBoostingClassifier(
++        n_iter_no_change=10,
++        validation_fraction=0.2,
++        max_iter=20,
++        random_state=42
++    )
++
++    gbrt.fit(X, y)
++
++    # Ensure it works correctly
++    predictions = gbrt.predict(X)
++    assert all(pred in ['class_x', 'class_y'] for pred in predictions)
++    assert gbrt.score(X, y) > 0.8  # Should achieve reasonable accuracy
++
++
++@pytest.mark.parametrize("target_type", ["string", "numeric"])
++@pytest.mark.parametrize("use_validation", [True, False])
++def test_early_stopping_with_different_target_types(target_type, use_validation):
++    # Test that early stopping works with both string and numeric targets
++    # and with/without validation data
++
++    rng = np.random.RandomState(42)
++    X = rng.randn(100, 10)
++
++    if target_type == "string":
++        y = np.array(['cls_' + str(i) for i in rng.randint(0, 3, size=100)])
++    else:
++        y = rng.randint(0, 3, size=100)
++
++    validation_fraction = 0.2 if use_validation else None
++
++    gbrt = HistGradientBoostingClassifier(
++        n_iter_no_change=5,
++        validation_fraction=validation_fraction,
++        max_iter=20,
++        random_state=42
++    )
++
++    # This should not raise any errors
++    gbrt.fit(X, y)
++
++    # Verify it makes reasonable predictions
++    predictions = gbrt.predict(X)
++
++    if target_type == "string":
++        expected_classes = np.unique(y)
++        assert all(pred in expected_classes for pred in predictions)
++    else:
++        assert all(isinstance(pred, (int, np.integer)) for pred in predictions)
++
++    # Should achieve reasonable accuracy
++    assert gbrt.score(X, y) > 0.5

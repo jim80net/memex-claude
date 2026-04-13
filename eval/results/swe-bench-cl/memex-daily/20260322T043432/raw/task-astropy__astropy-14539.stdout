@@ -1,0 +1,40 @@
+## Summary
+
+I've successfully identified and fixed the bug in `io.fits.FITSDiff` that incorrectly reported differences between identical files containing Variable Length Arrays (VLAs).
+
+### Root Cause 
+
+The issue was in `astropy/io/fits/diff.py` line 1452, where the VLA comparison logic only checked for "P" format:
+
+```python
+elif "P" in col.format:
+```
+
+However, "Q" format is also a variable-length array format (as `_FormatQ` inherits from `_FormatP`), but it wasn't being handled correctly. When a column used 'QD' format, it would fall through to the generic `np.where(arra != arrb)` comparison, which compares object identity rather than content for VLA data.
+
+### The Fix
+
+**Changed line 1452 in `astropy/io/fits/diff.py`:**
+```python
+elif "P" in col.format or "Q" in col.format:
+```
+
+This ensures that both P and Q format VLA columns use the proper `np.allclose()` element-by-element comparison instead of the problematic `!=` comparison.
+
+### Testing
+
+Added comprehensive regression test `test_identical_vla_qd_format()` in `astropy/io/fits/tests/test_diff.py` that:
+
+1. **Tests the original bug case**: QD format with identical data should show no differences
+2. **Ensures backward compatibility**: PD format continues to work correctly  
+3. **Validates correct functionality**: Different VLA data is still properly detected as different
+
+### Verification
+
+The fix ensures that:
+- Comparing identical VLA files returns `identical=True`
+- No false differences are reported between identical VLA data
+- Different VLA data is still properly detected
+- Both P and Q format VLA columns are handled consistently
+
+This resolves the issue where `fits.FITSDiff('diffbug.fits', 'diffbug.fits').identical` was incorrectly returning `False` for files with QD format VLA columns.
