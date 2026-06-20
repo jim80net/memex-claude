@@ -9,7 +9,6 @@ import { resolveClaudeOrigin } from "./core/projection.ts";
 import { handleUserPrompt } from "./hooks/user-prompt.ts";
 import { handleStop } from "./hooks/stop.ts";
 import { handlePreToolUse } from "./hooks/pre-tool-use.ts";
-import { handlePreCompact } from "./hooks/pre-compact.ts";
 import { handleSessionStart } from "./hooks/session-start.ts";
 
 async function readStdin(): Promise<string> {
@@ -117,12 +116,6 @@ async function main(): Promise<void> {
       case "Stop":
         if (config.hooks.Stop.enabled) {
           await handleStop(input, index, config.hooks.Stop, config.sync, config);
-        }
-        break;
-
-      case "PreCompact":
-        if (config.hooks.PreCompact.enabled) {
-          await handlePreCompact(input);
         }
         break;
 

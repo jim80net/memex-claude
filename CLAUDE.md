@@ -22,8 +22,8 @@ bun run build.ts     # compile standalone binary
   - `projection.ts` — G3 thin adapter: `resolveOriginRoot` / `planProjection` / `applyProjection` into `~/.claude/rules`
   - `scan-roots.ts` — ScanDirs assembly + portable handle registry (skips raw origin/rules when projecting)
   - `session.ts` — File-based session persistence (wraps core's `SessionTracker` interface)
-- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
-- `src/main.ts` — Entry point: SessionStart pull+project early; other events build `SkillIndex` and dispatch
+- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, session-start
+- `src/main.ts` — Entry point: SessionStart pulls/projects early; other registered events build `SkillIndex` and dispatch by `hook_event_name`
 - `bin/` — Wrapper scripts (memex, memex.cmd, install.sh, sleep-schedule.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover, memory-creation)
@@ -99,4 +99,4 @@ Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:
 - Tests mock `@jim80net/memex-core` functions (telemetry, sync, etc.) to avoid filesystem side effects
 - All Claude-specific paths are centralized in `src/core/paths.ts`
 - File writes to shared state (telemetry, session, registry) use advisory file locks from `@jim80net/memex-core`
-- All 5 hook events are registered in `hooks/hooks.json`; per-hook `enabled` config controls activation
+- Only hooks whose handler does real work are registered in `hooks/hooks.json` (SessionStart, UserPromptSubmit, PreToolUse, Stop); per-hook `enabled` config controls activation. A hook gated behind a default-`false` config flag must NOT be registered unconditionally — the registration cost (binary spawn + ONNX model load) is paid on every event regardless of the flag, so a static registration whose handler no-ops just burns a cold-start (and PreCompact's 10s timeout raced that cold-start during `/compact`). A registered event MUST have a matching dispatch case in `src/main.ts`; `test/hooks-registration.test.ts` enforces this invariant.
