@@ -39,9 +39,6 @@ Create `~/.claude/memex.json` to customize behavior. All fields are optional —
       "extractLearnings": true,
       "extractionModel": "",
       "behavioralRules": true
-    },
-    "PreCompact": {
-      "enabled": false
     }
   }
 }
@@ -90,14 +87,6 @@ Runs at session end. Extracts learnings and applies behavioral rules.
 | `extractLearnings` | boolean | `true` | Extract session learnings into memory |
 | `extractionModel` | string | `""` | Model for extraction (empty = use default) |
 | `behavioralRules` | boolean | `true` | Apply behavioral stop rules |
-
-#### `hooks.PreCompact`
-
-Runs before context compaction.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable/disable this hook |
 
 #### `sync`
 

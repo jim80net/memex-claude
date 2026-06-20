@@ -38,7 +38,6 @@ export type SkillRouterConfig = MemexCoreConfig & {
     UserPromptSubmit: HookConfig;
     PreToolUse: HookConfig;
     Stop: StopHookConfig;
-    PreCompact: { enabled: boolean };
   };
 };
 
@@ -79,9 +78,6 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
       extractLearnings: true,
       extractionModel: "",
       behavioralRules: true,
-    },
-    PreCompact: {
-      enabled: false,
     },
   },
 };
@@ -135,12 +131,6 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
       base.hooks.Stop = {
         ...base.hooks.Stop,
         ...uh.Stop,
-      };
-    }
-    if (uh.PreCompact) {
-      base.hooks.PreCompact = {
-        ...base.hooks.PreCompact,
-        ...uh.PreCompact,
       };
     }
   }
