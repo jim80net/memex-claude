@@ -70,7 +70,7 @@ describe("handleUserPrompt", () => {
 
   it("returns empty when no skills match", async () => {
     const index = makeIndex({ search: vi.fn().mockResolvedValue([]) });
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
     expect(result.additionalContext).toBeUndefined();
   });
 
@@ -80,7 +80,8 @@ describe("handleUserPrompt", () => {
       { ...BASE_INPUT, prompt: "" },
       index,
       BASE_CONFIG,
-      "takeover"
+      "takeover",
+      [],
     );
     expect(result.additionalContext).toBeUndefined();
   });
@@ -103,7 +104,7 @@ describe("handleUserPrompt", () => {
       readSkillContent: vi.fn().mockResolvedValue("# Weather\n\nFetch weather data."),
     });
 
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(result.additionalContext).toBeDefined();
     expect(result.additionalContext).toContain("Available Skill: weather");
@@ -131,7 +132,7 @@ describe("handleUserPrompt", () => {
       readSkillContent: vi.fn().mockResolvedValue("Use bun instead of npm."),
     });
 
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(result.additionalContext).toContain("Recalled Memory: prefer-bun");
     expect(result.additionalContext).toContain("Use bun instead of npm.");
@@ -159,7 +160,7 @@ describe("handleUserPrompt", () => {
       readSkillContent: vi.fn().mockResolvedValue("Always use pnpm for package management.\n- pnpm install\n- pnpm add <pkg>"),
     });
 
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(result.additionalContext).toContain("Rule: prefer-pnpm");
     expect(result.additionalContext).toContain("Always use pnpm for package management.");
@@ -186,7 +187,7 @@ describe("handleUserPrompt", () => {
       search: vi.fn().mockResolvedValue([match]),
     });
 
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(result.additionalContext).toContain("Rule reminder: prefer-pnpm");
     expect(result.additionalContext).toContain("Use pnpm, not npm.");
@@ -215,7 +216,7 @@ describe("handleUserPrompt", () => {
     const result = await handleUserPrompt(BASE_INPUT, index, {
       ...BASE_CONFIG,
       maxInjectedChars: 6000,
-    }, "takeover");
+    }, "takeover", []);
 
     expect(result.additionalContext).toContain("skill-a");
     expect(result.additionalContext).not.toContain("skill-b");
@@ -228,7 +229,7 @@ describe("handleUserPrompt", () => {
     await handleUserPrompt(BASE_INPUT, index, {
       ...BASE_CONFIG,
       types: ["memory", "workflow"],
-    }, "takeover");
+    }, "takeover", []);
 
     expect(searchFn).toHaveBeenCalledWith(
       BASE_INPUT.prompt,
@@ -259,7 +260,7 @@ describe("handleUserPrompt", () => {
         .mockResolvedValueOnce("Good content"),
     });
 
-    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(result.additionalContext).toContain("good");
     expect(result.additionalContext).not.toContain("bad");
@@ -286,7 +287,7 @@ describe("handleUserPrompt", () => {
       readSkillContent: vi.fn().mockResolvedValue("Test content"),
     });
 
-    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(recordMatch).toHaveBeenCalledWith(
       expect.any(Object),
@@ -300,7 +301,7 @@ describe("handleUserPrompt", () => {
     const searchFn = vi.fn().mockResolvedValue([]);
     const index = makeIndex({ search: searchFn });
 
-    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "assist");
+    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "assist", []);
 
     // Should strip "memory" and "session-learning" from the types list
     expect(searchFn).toHaveBeenCalledWith(
@@ -315,7 +316,7 @@ describe("handleUserPrompt", () => {
     const searchFn = vi.fn().mockResolvedValue([]);
     const index = makeIndex({ search: searchFn });
 
-    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover");
+    await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", []);
 
     expect(searchFn).toHaveBeenCalledWith(
       BASE_INPUT.prompt,
@@ -332,9 +333,39 @@ describe("handleUserPrompt", () => {
       BASE_INPUT,
       index,
       { ...BASE_CONFIG, types: ["memory", "session-learning"] },
-      "assist"
+      "assist",
+      [],
     );
 
     expect(result.additionalContext).toBeUndefined();
+  });
+
+  it("skill teaser resolves memex:// handle to absolute path for display", async () => {
+    const absolute = "/home/user/.claude/skills/weather/SKILL.md";
+    const handle = "memex://claude-global/weather/SKILL.md";
+    const registry = [
+      { key: "claude-global", rootPath: "/home/user/.claude/skills" },
+    ];
+
+    const match: SkillSearchResult = {
+      skill: {
+        name: "weather",
+        description: "Get weather forecasts",
+        location: handle,
+        type: "skill",
+        embeddings: [],
+        queries: [],
+      },
+      score: 0.92,
+      bestQueryIndex: 0,
+    };
+    const index = makeIndex({
+      search: vi.fn().mockResolvedValue([match]),
+    });
+
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", registry);
+
+    expect(result.additionalContext).toContain(absolute);
+    expect(result.additionalContext).not.toContain(handle);
   });
 });

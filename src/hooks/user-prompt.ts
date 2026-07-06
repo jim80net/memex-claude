@@ -1,6 +1,12 @@
-import type { SkillIndex } from "@jim80net/memex-core";
+import type { SkillIndex, ScanRootRegistry } from "@jim80net/memex-core";
 import type { HookInput, HookOutput } from "@jim80net/memex-core";
-import { loadTelemetry, saveTelemetry, recordMatch, withFileLock } from "@jim80net/memex-core";
+import {
+  loadTelemetry,
+  saveTelemetry,
+  recordMatch,
+  withFileLock,
+  resolvePortableLocationResolved,
+} from "@jim80net/memex-core";
 import type { HookConfig, AutoMemoryMode } from "../core/config.ts";
 import { loadSession, saveSession, hasRuleBeenShown, markRuleShown } from "../core/session.ts";
 import { getClaudePaths } from "../core/paths.ts";
@@ -9,7 +15,8 @@ export async function handleUserPrompt(
   input: HookInput,
   index: SkillIndex,
   hookConfig: HookConfig,
-  autoMemoryMode: AutoMemoryMode
+  autoMemoryMode: AutoMemoryMode,
+  registry: ScanRootRegistry,
 ): Promise<HookOutput> {
   const prompt = input.prompt;
   if (!prompt || prompt.trim().length === 0) return {};
@@ -72,8 +79,12 @@ export async function handleUserPrompt(
       }
       section = `## Recalled Memory: ${skill.name} (relevance: ${relevance})\n\n${content}`;
     } else {
-      // Skill, workflow, tool-guidance: description teaser only
-      section = `## Available Skill: ${skill.name} (relevance: ${relevance})\n\n**${skill.name}**: ${skill.description}\n\nTo use this skill, read the full instructions at: \`${skill.location}\``;
+      const { filePath: displayPath } = resolvePortableLocationResolved(
+        registry,
+        skill.location,
+        { allowAbsolute: true },
+      );
+      section = `## Available Skill: ${skill.name} (relevance: ${relevance})\n\n**${skill.name}**: ${skill.description}\n\nTo use this skill, read the full instructions at: \`${displayPath}\``;
     }
 
     if (totalChars + section.length > hookConfig.maxInjectedChars) break;
