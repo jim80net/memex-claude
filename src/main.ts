@@ -1,19 +1,10 @@
 #!/usr/bin/env node
 import { join } from "node:path";
-import {
-  SkillIndex,
-  LocalEmbeddingProvider,
-  getSyncScanDirs,
-  findMatchingProjectMemoryDirs,
-} from "@jim80net/memex-core";
-import type { HookInput, HookOutput, ScanDirs } from "@jim80net/memex-core";
+import { SkillIndex, LocalEmbeddingProvider } from "@jim80net/memex-core";
+import type { HookInput, HookOutput } from "@jim80net/memex-core";
 import { loadConfig } from "./core/config.ts";
-import {
-  getClaudePaths,
-  getProjectMemoryDir,
-  getProjectSkillsDir,
-  getProjectRulesDir,
-} from "./core/paths.ts";
+import { getClaudePaths } from "./core/paths.ts";
+import { assembleClaudeScanDirs, buildClaudeScanRoots } from "./core/scan-roots.ts";
 import { handleUserPrompt } from "./hooks/user-prompt.ts";
 import { handleStop } from "./hooks/stop.ts";
 import { handlePreToolUse } from "./hooks/pre-tool-use.ts";
@@ -51,28 +42,15 @@ async function main(): Promise<void> {
   // Construct core objects
   const provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
   const cachePath = join(paths.cacheDir, "memex-cache.json");
-  const index = new SkillIndex(config, provider, cachePath);
 
-  // Build scan dirs from claude-specific paths
-  const scanDirs: ScanDirs = {
-    skillDirs: [paths.globalSkillsDir, getProjectSkillsDir(cwd), ...config.skillDirs],
-    memoryDirs: [getProjectMemoryDir(cwd, paths.projectsDir)],
-    ruleDirs: [paths.globalRulesDir, getProjectRulesDir(cwd)],
-  };
-
-  // Add sync repo scan paths if sync is enabled
-  if (config.sync.enabled) {
-    const syncDirs = getSyncScanDirs(paths.syncRepoDir);
-    scanDirs.skillDirs.push(syncDirs.skillsDir);
-    scanDirs.ruleDirs.push(syncDirs.rulesDir);
-
-    const syncMemDirs = await findMatchingProjectMemoryDirs(
-      cwd,
-      paths.syncRepoDir,
-      config.sync,
-    );
-    scanDirs.memoryDirs.push(...syncMemDirs);
-  }
+  const scanDirs = await assembleClaudeScanDirs(
+    cwd,
+    paths,
+    config.skillDirs,
+    config.sync,
+  );
+  const registry = buildClaudeScanRoots(cwd, paths, scanDirs, config.sync.enabled);
+  const index = new SkillIndex(config, provider, cachePath, { registry });
 
   // Build index (will use cache for unchanged files)
   try {
@@ -94,7 +72,13 @@ async function main(): Promise<void> {
 
       case "UserPromptSubmit":
         if (config.hooks.UserPromptSubmit.enabled) {
-          result = await handleUserPrompt(input, index, config.hooks.UserPromptSubmit, config.autoMemoryMode);
+          result = await handleUserPrompt(
+            input,
+            index,
+            config.hooks.UserPromptSubmit,
+            config.autoMemoryMode,
+            registry,
+          );
         }
         break;
 
