@@ -79,11 +79,16 @@ export async function handleUserPrompt(
       }
       section = `## Recalled Memory: ${skill.name} (relevance: ${relevance})\n\n${content}`;
     } else {
-      const { filePath: displayPath } = resolvePortableLocationResolved(
-        registry,
-        skill.location,
-        { allowAbsolute: true },
-      );
+      let displayPath: string;
+      try {
+        ({ filePath: displayPath } = resolvePortableLocationResolved(
+          registry,
+          skill.location,
+          { allowAbsolute: true },
+        ));
+      } catch {
+        displayPath = skill.location;
+      }
       section = `## Available Skill: ${skill.name} (relevance: ${relevance})\n\n**${skill.name}**: ${skill.description}\n\nTo use this skill, read the full instructions at: \`${displayPath}\``;
     }
 

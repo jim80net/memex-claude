@@ -340,6 +340,50 @@ describe("handleUserPrompt", () => {
     expect(result.additionalContext).toBeUndefined();
   });
 
+  it("skill teaser with unknown-root handle degrades to raw location without dropping other results", async () => {
+    const unknownHandle = "memex://stale-catalog-key/weather/SKILL.md";
+    const registry = [{ key: "claude-global", rootPath: "/home/user/.claude/skills" }];
+
+    const matches: SkillSearchResult[] = [
+      {
+        skill: {
+          name: "stale-skill",
+          description: "Cached from old host",
+          location: unknownHandle,
+          type: "skill",
+          embeddings: [],
+          queries: [],
+        },
+        score: 0.95,
+        bestQueryIndex: 0,
+      },
+      {
+        skill: {
+          name: "prefer-bun",
+          description: "Use bun over npm",
+          location: "/fake/skills/bun/SKILL.md",
+          type: "memory",
+          embeddings: [],
+          queries: [],
+        },
+        score: 0.88,
+        bestQueryIndex: 0,
+      },
+    ];
+    const index = makeIndex({
+      search: vi.fn().mockResolvedValue(matches),
+      readSkillContent: vi.fn().mockResolvedValue("Use bun instead of npm."),
+    });
+
+    const result = await handleUserPrompt(BASE_INPUT, index, BASE_CONFIG, "takeover", registry);
+
+    expect(result.additionalContext).toBeDefined();
+    expect(result.additionalContext).toContain("Recalled Memory: prefer-bun");
+    expect(result.additionalContext).toContain("Use bun instead of npm.");
+    expect(result.additionalContext).toContain("Available Skill: stale-skill");
+    expect(result.additionalContext).toContain(unknownHandle);
+  });
+
   it("skill teaser resolves memex:// handle to absolute path for display", async () => {
     const absolute = "/home/user/.claude/skills/weather/SKILL.md";
     const handle = "memex://claude-global/weather/SKILL.md";
