@@ -218,24 +218,26 @@ The router can sync your growing corpus of rules, skills, and memories across wo
 
 ### How it works
 
-- **Session start**: pulls latest changes from the remote repo (`git pull --rebase`)
-- **Session end**: copies new/changed rules, skills, and memories into the sync repo, commits, and pushes
-- **Conflict resolution**: markdown conflicts are auto-resolved by keeping both sides
+- **Session start**: resolves the shared origin (`resolveOriginRoot` — product default `~/.memex`, with legacy `~/.local/share/memex-claude` still valid), pulls when a remote is configured, then **projects** origin rules into `~/.claude/rules` as absolute symlinks (fail-closed: real files are never overwritten)
+- **Session end** (when Stop hook + `autoCommitPush` are enabled): copies local-only changes into the origin and pushes; managed rule symlinks are skipped so origin is not thrashed
+- **Conflict resolution**: markdown git conflicts are auto-resolved by keeping both sides; projection conflicts (name already a real file under `~/.claude/rules`) leave the real file untouched
+- **Scan policy**: when projection is active, the index reads harness rule dirs only (links resolve into origin) — origin `rules/` is not double-scanned
 
-### Sync repo structure
+Optional origin override: set `sync.repoDir` in `~/.claude/memex.json`, or env `MEMEX_ORIGIN`. Mass migrate to `~/.memex` is **opt-in only** — not required.
+
+### Sync / origin structure
 
 ```
-~/.local/share/memex-claude/
-├── .git/
-├── rules/                                      # synced global rules
-├── skills/                                     # synced global skills
-│   └── my-skill/SKILL.md
-└── projects/
-    ├── github.com/you/my-project/              # git-identified projects
-    │   └── memory/*.md
-    └── _local/                                 # non-git projects
-        └── -home-you-some-project/
-            └── memory/*.md
+# Effective origin (resolved; one tree — not both forever)
+~/.memex/                         # product default when present / greenfield
+# or ~/.local/share/memex-claude/  # legacy-claude corpus (still supported)
+├── .git/                         # when remote-backed
+├── rules/                        # origin rules (source of truth)
+├── skills/
+└── projects/.../memory/
+
+# Harness projection surface
+~/.claude/rules/*.md              # managed entries = symlinks → origin/rules/*
 ```
 
 ### Project identity

@@ -119,6 +119,31 @@ ls .claude/rules/*.md 2>/dev/null
 ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 ```
 
+### 5b. Shared-origin / rules projection (G3)
+
+When `sync.enabled: true` in `~/.claude/memex.json`, memex projects origin rules into `~/.claude/rules` as **symlinks** (fail-closed; never overwrites real files).
+
+```bash
+# Pin (expect @jim80net/memex-core ^0.6.0)
+node -e "console.log(require('./node_modules/@jim80net/memex-core/package.json').version)" 2>/dev/null \
+  || cat node_modules/@jim80net/memex-core/package.json 2>/dev/null | head -5
+
+# Effective origin (resolver: ~/.memex → XDG → legacy-claude)
+ls -la ~/.memex/rules 2>/dev/null | head
+ls -la ~/.local/share/memex-claude/rules 2>/dev/null | head
+
+# Projection provenance — managed rules should be symlinks into origin
+ls -la ~/.claude/rules | head -20
+# Example: readlink on a projected rule (name will vary)
+# readlink -f ~/.claude/rules/some-rule.md
+
+# Real files that share a name with an origin entry are left alone (conflicts)
+find ~/.claude/rules -maxdepth 1 -type f -name '*.md' | wc -l
+find ~/.claude/rules -maxdepth 1 -type l -name '*.md' | wc -l
+```
+
+**Memory surface (Claude):** rules/skills/memories deliver via **hooks** (UserPromptSubmit) and auto-memory assist/takeover. Projection makes shared-origin files visible under `~/.claude/rules` as symlinks — it does **not** invent a new inject path.
+
 If no files are found in any location, memex has nothing to inject. Create a test skill:
 
 ```bash

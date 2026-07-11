@@ -18,10 +18,12 @@ bun run build.ts     # compile standalone binary
 - `@jim80net/memex-core` — Shared engine (separate repo): embeddings (ONNX + OpenAI), skill-index, cache, config, session, telemetry, sync, project-mapping, project-registry, file-lock, traces, types
 - `src/core/` — Claude-specific wrappers:
   - `paths.ts` — Claude path configuration (`~/.claude/...`)
-  - `config.ts` — Extends `MemexCoreConfig` with hook-specific config, sync, sleep schedule
+  - `config.ts` — Extends `MemexCoreConfig` with hook-specific config, sync (`repoDir?`), sleep schedule
+  - `projection.ts` — G3 thin adapter: `resolveOriginRoot` / `planProjection` / `applyProjection` into `~/.claude/rules`
+  - `scan-roots.ts` — ScanDirs assembly + portable handle registry (skips raw origin/rules when projecting)
   - `session.ts` — File-based session persistence (wraps core's `SessionTracker` interface)
 - `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
-- `src/main.ts` — Entry point: constructs `SkillIndex`, `LocalEmbeddingProvider`, `ScanDirs`, dispatches by `hook_event_name`
+- `src/main.ts` — Entry point: SessionStart pull+project early; other events build `SkillIndex` and dispatch
 - `bin/` — Wrapper scripts (memex, memex.cmd, install.sh, sleep-schedule.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover, memory-creation)
@@ -35,7 +37,7 @@ bun run build.ts     # compile standalone binary
 | Skills | `~/.claude/skills/*/SKILL.md` | `<cwd>/.claude/skills/*/SKILL.md` | `<sync-repo>/skills/*/SKILL.md` |
 | Memory | `~/.claude/projects/<encoded-cwd>/memory/*.md` | — | `<sync-repo>/projects/<canonical-id>/memory/*.md` |
 
-When sync is enabled, the sync repo at `~/.local/share/memex-claude/` is scanned alongside local paths.
+When sync is enabled, origin skills/memories are scanned alongside harness paths. When **rules projection** is active (`sync.enabled`), origin `rules/` is **not** double-scanned — harness `~/.claude/rules` holds symlinks into origin (pin `@jim80net/memex-core@^0.6.0`).
 
 ### Disclosure model
 

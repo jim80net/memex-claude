@@ -6,10 +6,21 @@ import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { syncPull, loadRegistry, saveRegistry, registerProject, withFileLock } from "@jim80net/memex-core";
-import type { HookInput, HookOutput, SyncConfig } from "@jim80net/memex-core";
-import type { SleepScheduleConfig, AutoMemoryMode } from "../core/config.ts";
+import type { HookInput, HookOutput } from "@jim80net/memex-core";
+import type {
+  ClaudeSyncConfig,
+  SleepScheduleConfig,
+  AutoMemoryMode,
+  SkillRouterConfig,
+} from "../core/config.ts";
 import { isAutoMemoryEnabled } from "../core/config.ts";
 import { getClaudePaths } from "../core/paths.ts";
+import {
+  isProjectionProfileSet,
+  resolveClaudeOrigin,
+  runClaudeProjection,
+  toCoreSyncConfig,
+} from "../core/projection.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,9 +40,11 @@ function getPluginRoot(): string {
 
 export async function handleSessionStart(
   input: HookInput,
-  syncConfig: SyncConfig,
+  syncConfig: ClaudeSyncConfig,
   sleepConfig: SleepScheduleConfig,
-  autoMemoryMode: AutoMemoryMode
+  autoMemoryMode: AutoMemoryMode,
+  /** Full router config when available — enables G3 projection after pull. */
+  routerConfig?: SkillRouterConfig,
 ): Promise<HookOutput> {
   const cwd = input.cwd || process.cwd();
   const paths = getClaudePaths();
@@ -48,10 +61,36 @@ export async function handleSessionStart(
     // Best-effort
   }
 
-  // 2. Sync pull
-  if (syncConfig.enabled && syncConfig.autoPull) {
+  // 2. Sync pull + rules projection (G3)
+  //    When full config is available and profile is set: resolveOriginRoot →
+  //    pull into origin → plan/apply symlinks (fail-closed, no clobber).
+  //    Else legacy: pull into paths.syncRepoDir only.
+  if (routerConfig && isProjectionProfileSet(routerConfig)) {
     try {
-      const result = await syncPull(syncConfig, paths.syncRepoDir);
+      const report = await runClaudeProjection({
+        config: routerConfig,
+        cwd,
+        paths,
+        pull: true,
+      });
+      if (report.pullMessage) {
+        process.stderr.write(`memex[sync]: ${report.pullMessage}\n`);
+      }
+      process.stderr.write(`memex[projection]: ${report.message}\n`);
+    } catch (err) {
+      process.stderr.write(`memex[projection]: failed: ${err}\n`);
+    }
+  } else if (syncConfig.enabled && syncConfig.autoPull) {
+    try {
+      const coreSync = toCoreSyncConfig({ sync: syncConfig } as SkillRouterConfig);
+      let repoDir = paths.syncRepoDir;
+      try {
+        const origin = await resolveClaudeOrigin(syncConfig);
+        if (origin.exists) repoDir = origin.root;
+      } catch {
+        // keep legacy syncRepoDir
+      }
+      const result = await syncPull(coreSync, repoDir);
       process.stderr.write(`memex[sync]: ${result}\n`);
     } catch (err) {
       process.stderr.write(`memex[sync]: pull failed: ${err}\n`);

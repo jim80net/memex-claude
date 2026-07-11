@@ -5,6 +5,7 @@ import type { HookInput, HookOutput } from "@jim80net/memex-core";
 import { loadConfig } from "./core/config.ts";
 import { getClaudePaths } from "./core/paths.ts";
 import { assembleClaudeScanDirs, buildClaudeScanRoots } from "./core/scan-roots.ts";
+import { resolveClaudeOrigin } from "./core/projection.ts";
 import { handleUserPrompt } from "./hooks/user-prompt.ts";
 import { handleStop } from "./hooks/stop.ts";
 import { handlePreToolUse } from "./hooks/pre-tool-use.ts";
@@ -38,6 +39,35 @@ async function main(): Promise<void> {
 
   const cwd = input.cwd || process.cwd();
   const paths = getClaudePaths();
+  const event = input.hook_event_name;
+
+  // SessionStart: pull + project before any index work (design §8).
+  // SessionStart does not use the skill index.
+  if (event === "SessionStart") {
+    let result: HookOutput = {};
+    try {
+      result = await handleSessionStart(
+        input,
+        config.sync,
+        config.sleepSchedule,
+        config.autoMemoryMode,
+        config,
+      );
+    } catch (err) {
+      process.stderr.write(`memex: handler error for SessionStart: ${err}\n`);
+    }
+    outputResult(result);
+    return;
+  }
+
+  // Resolve origin for scan policy (avoid hardcoding only legacy syncRepoDir)
+  let originRoot: string | undefined;
+  try {
+    const origin = await resolveClaudeOrigin(config);
+    originRoot = origin.root;
+  } catch {
+    originRoot = undefined;
+  }
 
   // Construct core objects
   const provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
@@ -48,6 +78,7 @@ async function main(): Promise<void> {
     paths,
     config.skillDirs,
     config.sync,
+    { originRoot },
   );
   const registry = buildClaudeScanRoots(cwd, paths, scanDirs, config.sync.enabled);
   const index = new SkillIndex(config, provider, cachePath, { registry });
@@ -61,15 +92,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const event = input.hook_event_name;
   let result: HookOutput = {};
 
   try {
     switch (event) {
-      case "SessionStart":
-        result = await handleSessionStart(input, config.sync, config.sleepSchedule, config.autoMemoryMode);
-        break;
-
       case "UserPromptSubmit":
         if (config.hooks.UserPromptSubmit.enabled) {
           result = await handleUserPrompt(
@@ -90,7 +116,7 @@ async function main(): Promise<void> {
 
       case "Stop":
         if (config.hooks.Stop.enabled) {
-          await handleStop(input, index, config.hooks.Stop, config.sync);
+          await handleStop(input, index, config.hooks.Stop, config.sync, config);
         }
         break;
 

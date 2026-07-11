@@ -1,16 +1,25 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { SkillIndex } from "@jim80net/memex-core";
-import type { HookInput, SyncConfig } from "@jim80net/memex-core";
+import type { HookInput } from "@jim80net/memex-core";
 import { syncCommitAndPush } from "@jim80net/memex-core";
-import type { StopHookConfig } from "../core/config.ts";
+import type { ClaudeSyncConfig, SkillRouterConfig, StopHookConfig } from "../core/config.ts";
 import { getClaudePaths, getProjectMemoryDir } from "../core/paths.ts";
+import {
+  cleanupStageDir,
+  resolveClaudeOrigin,
+  rulesProjectionActive,
+  stageRulesForCopyUp,
+  toCoreSyncConfig,
+} from "../core/projection.ts";
 
 
 export async function handleStop(
   input: HookInput,
   index: SkillIndex,
   hookConfig: StopHookConfig,
-  syncConfig?: SyncConfig
+  syncConfig?: ClaudeSyncConfig,
+  routerConfig?: SkillRouterConfig,
 ): Promise<void> {
   // --- Behavioral rules ---
   let behavioralRuleFeedback: string | null = null;
@@ -57,12 +66,51 @@ export async function handleStop(
   if (syncConfig?.enabled && syncConfig.autoCommitPush) {
     const cwd = input.cwd || process.cwd();
     const paths = getClaudePaths();
+    const coreSync = toCoreSyncConfig(
+      routerConfig ?? ({ sync: syncConfig } as SkillRouterConfig),
+    );
+
+    let originRoot = paths.syncRepoDir;
+    try {
+      const origin = await resolveClaudeOrigin(
+        routerConfig ?? ({ sync: syncConfig } as SkillRouterConfig),
+      );
+      originRoot = origin.root;
+    } catch {
+      // keep legacy syncRepoDir
+    }
+
+    // When rules projection is active, stage only non-managed (real) rule files
+    // so managed origin symlinks are not copy-up thrash (design §7.2A).
+    let rulesSource = paths.globalRulesDir;
+    let stageDir: string | null = null;
+    if (rulesProjectionActive(syncConfig)) {
+      stageDir = join(paths.cacheDir, `stop-rules-stage-${process.pid}`);
+      try {
+        const { staged, skippedManaged } = await stageRulesForCopyUp(
+          paths.globalRulesDir,
+          originRoot,
+          stageDir,
+        );
+        rulesSource = stageDir;
+        if (skippedManaged > 0) {
+          process.stderr.write(
+            `memex[sync]: skipped ${skippedManaged} managed rule symlink(s); staging ${staged} local rule(s)\n`,
+          );
+        }
+      } catch (err) {
+        process.stderr.write(`memex[sync]: rules stage failed, using harness dir: ${err}\n`);
+        stageDir = null;
+        rulesSource = paths.globalRulesDir;
+      }
+    }
+
     try {
       const result = await syncCommitAndPush(
-        syncConfig,
-        paths.syncRepoDir,
+        coreSync,
+        originRoot,
         {
-          rules: paths.globalRulesDir,
+          rules: rulesSource,
           skills: paths.globalSkillsDir,
           projectMemoryDir: getProjectMemoryDir(cwd, paths.projectsDir),
         },
@@ -71,6 +119,8 @@ export async function handleStop(
       process.stderr.write(`memex[sync]: ${result}\n`);
     } catch (err) {
       process.stderr.write(`memex[sync]: commit+push failed: ${err}\n`);
+    } finally {
+      if (stageDir) await cleanupStageDir(stageDir);
     }
   }
 
