@@ -1,8 +1,8 @@
 # memex-claude addendum — G3 file-rules projection (shared-origin alignment)
 
 **Date:** 2026-07-11  
-**Status:** design only — **no implementation in this PR**  
-**Authority:** operator steer `flotilla-dispatch-c29001c1` · G3 brief `adapter-alignment-g3-2026-07-11.md`  
+**Status:** design **gated** (#54) · **wave LIVE** (CoS AUTHORIZE 2026-07-11) · impl in follow-on PR  
+**Authority:** operator steer `flotilla-dispatch-c29001c1` · CoS AUTHORIZE wave · G3 brief `adapter-alignment-g3-2026-07-11.md`  
 **Pin (impl):** `@jim80net/memex-core@^0.6.0` (currently package.json pins `^0.5.0` — bump at impl)  
 **Proven path:** memex-grok#30 design + #31 impl (`src/core/projection.ts`)  
 **Core contract:** `resolveOriginRoot` / `planProjection` / `applyProjection` / `defaultOriginRoot` / `legacyClaudeOriginRoot`  
@@ -15,9 +15,24 @@
 
 Align the Claude adapter with the **same lifecycle model** Grok proved: core owns origin truth and symlink policy; this adapter owns **Claude harness paths**, **when** projection runs, **scan/index coexistence** with the existing copy-sync path, and **doctor/health messaging**.
 
-Claude already delivers rules/skills/memory via **hooks** (`UserPromptSubmit` inject) and optional git **copy-sync** (`SessionStart` pull → scan origin tree; `Stop` copy harness → origin). G3 does **not** replace hook delivery or invent inject-first. It adds **file-shaped provenance**: managed origin rules appear under `~/.claude/rules` (and optionally project rules) as **absolute symlinks into the shared origin**, fail-closed, with **one content blob → one index entry**.
+Claude already delivers rules/skills/memory via **hooks** (`UserPromptSubmit` inject) and optional git **copy-sync** (`SessionStart` pull → scan origin tree; `Stop` copy harness → origin). G3 does **not** invent inject paths. It **prefers file-shaped surface**: managed origin rules appear under `~/.claude/rules` (and optionally project rules) as **absolute symlinks into the shared origin**, fail-closed, with **one content blob → one index entry**. Hooks continue to *read* those files via the index; they are not a substitute for missing on-disk projection.
 
 **Impl gate:** this design passes memex systems-review → pin `memex-core@^0.6.0` → implement projection + scan policy + doctor skill checks → dogfood / manual verify → no freeze-SHA / self-merge from this seat.
+
+### 0.1 CoS-locked acceptance (wave tracks A/B/C)
+
+| Track | CoS requirement | Claude plan (this design) |
+|-------|-----------------|---------------------------|
+| **A. Core pin** | `@jim80net/memex-core@^0.6.0`; tests green; no silent skew | Impl step 1: bump `package.json` + lockfile from `^0.5.0` → `^0.6.0`; CI + local `pnpm test` / `typecheck` green before/with projection |
+| **B. File-shaped projection** | Rules (skills where supported) as files under harness dirs via core plan/apply; prefer files over inject; no invented inject paths | v1: project origin `rules/` → `~/.claude/rules` (verified path); skills projection **supported by harness** (`~/.claude/skills`) but **deferred** after rules (same as grok#31); hooks remain delivery, not a new inject surface |
+| **C. `~/.memex` migrate** | **Opt-in only** if it unblocks A/B; default keep current origins | **Default:** `resolveOriginRoot` chain — legacy-claude `~/.local/share/memex-claude` OK. **No mass migrate** in this wave. Optional one-pager only if A/B blocked (not expected for Claude) |
+
+### 0.2 Pin matrix row (this seat)
+
+| Seat | Pin before (main) | Target | Gap |
+|------|-------------------|--------|-----|
+| **memex-claude** | `^0.5.0` | `^0.6.0` | bump + projection (this design → impl PR after gate) |
+| memex-grok (reference) | `^0.6.0` | `^0.6.0` | **DONE** |
 
 ---
 
@@ -205,7 +220,7 @@ Core 0.6.0 resolver product default is **`~/.memex`**, with XDG + **legacy-claud
 | Config override | Prefer core-native: optional `sync` extension **or** env `MEMEX_ORIGIN`. Grok added local `repoDir?: string` on its SyncConfig bridge — Claude may mirror that **thin** optional field **or** rely on `MEMEX_ORIGIN` only in v1 to avoid schema drift. **Recommendation:** accept optional `sync.repoDir` (string) in mergeConfig as adapter-local override mapped to `resolveOriginRoot({ root })`, same as grok, until core documents a single JSON field name. |
 | Live host with both `~/.memex` and legacy corpus | Resolver returns first existing in precedence; doctor must print `source` (`default` \| `xdg` \| `legacy-claude` \| `env` \| `explicit`) so operators see which tree is active |
 
-**Non-goal this wave:** force-migrate production origin to `~/.memex` (brief: optional follow-on).
+**Track C — default keep current origins.** Do **not** mass-migrate production to `~/.memex` in this wave. Resolver already handles `legacy-claude`. A host-local opt-in migrate is allowed **only** if A/B are blocked without it (Claude: not expected — legacy path is first-class). If ever needed: PREP one-pager with reversibility before any mass move (CoS scope C).
 
 ---
 
@@ -432,17 +447,20 @@ Host-path egress: prefer relative/`~/…` in skill prose; scrub absolute host pa
 - After gate: authorize impl PR against pin `^0.6.0`.
 - Do not require freeze-SHA from this seat.
 
-### ## Backlog
+### ## Backlog (wave LIVE — CoS AUTHORIZE)
 
 | Marker | Item | Owner |
 |--------|------|-------|
-| `[blocked] settle: design-gate` | Impl blocked until this design is gated by memex. | memex |
-| `[ready] settle: core-pin` | Core 0.6.0 published; pin bump is impl-step 1. | memex-claude (post-gate) |
-| `[follow-on] settle: skills-projection` | Same symlink model for `~/.claude/skills` after rules path proven. | memex-claude |
-| `[follow-on] settle: live-rules-migration` | Optional tool to convert identical real files → managed symlinks (content-equal only). | memex-claude / memex |
-| `[follow-on] settle: origin-migrate-to-memex` | Optional host migrate legacy-claude → `~/.memex` (core-owned story). | memex-core |
+| `[live] settle: design-gate` | Design PR open; **awaiting memex gate** before impl. | memex |
+| `[live] settle: A-core-pin` | After design gate: bump `^0.5.0` → `^0.6.0`; tests green; no silent skew. | memex-claude |
+| `[live] settle: B-projection` | After design gate: projection + scan policy + Stop filter + doctor skill. | memex-claude |
+| `[ready] settle: core-published` | Core 0.6.0 already on npm (Grok reference). | — |
+| `[follow-on] settle: skills-projection` | Track B skills where supported — same symlink model for `~/.claude/skills` after rules proven. | memex-claude |
+| `[follow-on] settle: live-rules-migration` | Optional convert identical real files → managed symlinks (content-equal only). | memex-claude / memex |
+| `[opt-in] settle: C-memex-migrate` | Track C — only if A/B blocked; PREP + reversibility; default keep legacy-claude. | memex-core / operator |
 | `[non-goal] settle: inject-first` | Explicitly out of scope. | — |
 | `[non-goal] settle: refinement-product` | Deferred by operator. | — |
+| `[non-goal] settle: freeze-SHA / self-merge / codex cutover` | Not this seat. | — |
 
 ---
 

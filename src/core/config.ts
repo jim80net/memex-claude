@@ -29,10 +29,23 @@ export type SleepScheduleConfig = {
 
 export type AutoMemoryMode = "assist" | "takeover";
 
+/**
+ * Extension of SyncConfig with optional origin root override.
+ * Maps to core resolveOriginRoot({ root }) — product default ~/.memex,
+ * with legacy-claude fallback via the resolver chain.
+ */
+export type ClaudeSyncConfig = SyncConfig & {
+  /**
+   * Explicit origin root override (absolute or ~/…).
+   * When unset, core resolveOriginRoot walks ~/.memex → XDG → legacy-claude.
+   */
+  repoDir?: string;
+};
+
 export type SkillRouterConfig = MemexCoreConfig & {
   autoMemoryMode: AutoMemoryMode;
   skillDirs: string[];
-  sync: SyncConfig;
+  sync: ClaudeSyncConfig;
   sleepSchedule: SleepScheduleConfig;
   hooks: {
     UserPromptSubmit: HookConfig;
@@ -111,6 +124,12 @@ function mergeConfig(user: Partial<SkillRouterConfig>): SkillRouterConfig {
 
   if (user.sync) {
     base.sync = { ...base.sync, ...user.sync };
+    // Preserve optional repoDir only when explicitly a non-empty string
+    if (typeof user.sync.repoDir === "string" && user.sync.repoDir.trim() !== "") {
+      base.sync.repoDir = user.sync.repoDir;
+    } else if ("repoDir" in user.sync && (user.sync.repoDir === undefined || user.sync.repoDir === "")) {
+      delete base.sync.repoDir;
+    }
   }
 
   if (user.sleepSchedule) {
