@@ -1,0 +1,66 @@
+diff --git a/sphinx/builders/gettext.py b/sphinx/builders/gettext.py
+index e8bc547b7..eca3a1453 100644
+--- a/sphinx/builders/gettext.py
++++ b/sphinx/builders/gettext.py
+@@ -32,9 +32,19 @@ class Message:
+     """An entry of translatable message."""
+     def __init__(self, text: str, locations: List[Tuple[str, int]], uuids: List[str]):
+         self.text = text
+-        self.locations = locations
++        self.locations = self._deduplicate_locations(locations)
+         self.uuids = uuids
+ 
++    def _deduplicate_locations(self, locations: List[Tuple[str, int]]) -> List[Tuple[str, int]]:
++        """Remove duplicate locations while preserving order of first occurrence."""
++        seen = set()
++        deduplicated = []
++        for location in locations:
++            if location not in seen:
++                seen.add(location)
++                deduplicated.append(location)
++        return deduplicated
++
+ 
+ class Catalog:
+     """Catalog of translatable messages."""
+diff --git a/tests/test_build_gettext.py b/tests/test_build_gettext.py
+index 3c4617e84..260e088bb 100644
+--- a/tests/test_build_gettext.py
++++ b/tests/test_build_gettext.py
+@@ -184,3 +184,36 @@ def test_build_single_pot(app):
+          'msgid "Generated section".*'),
+         result,
+         flags=re.S)
++
++
++def test_gettext_message_deduplication():
++    """Test that duplicate locations in Message objects are properly deduplicated."""
++    from sphinx.builders.gettext import Message
++
++    # Test case 1: Basic deduplication
++    locations = [('/path/to/file.rst', 10), ('/path/to/file.rst', 10), ('/path/to/other.rst', 20)]
++    uuids = ['uuid1', 'uuid2', 'uuid3']
++    message = Message("Test message", locations, uuids)
++
++    # Should only have 2 unique locations, not 3
++    assert len(message.locations) == 2
++    assert message.locations == [('/path/to/file.rst', 10), ('/path/to/other.rst', 20)]
++
++    # Test case 2: Preserve order while deduplicating
++    locations = [('/a.rst', 1), ('/b.rst', 2), ('/a.rst', 1), ('/c.rst', 3), ('/b.rst', 2)]
++    message = Message("Another message", locations, uuids)
++
++    # Should preserve the order of first occurrence
++    assert len(message.locations) == 3
++    assert message.locations == [('/a.rst', 1), ('/b.rst', 2), ('/c.rst', 3)]
++
++    # Test case 3: No duplicates (should remain unchanged)
++    locations = [('/x.rst', 5), ('/y.rst', 10), ('/z.rst', 15)]
++    message = Message("No duplicates", locations, uuids)
++
++    assert len(message.locations) == 3
++    assert message.locations == [('/x.rst', 5), ('/y.rst', 10), ('/z.rst', 15)]
++
++    # Test case 4: Empty locations
++    message = Message("Empty", [], [])
++    assert message.locations == []

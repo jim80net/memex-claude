@@ -1,0 +1,50 @@
+I've successfully fixed the IndexError in the `sqrtdenest` function. Here's what I did:
+
+## Problem Analysis
+The issue was in the `_split_gcd` function in `sympy/simplify/radsimp.py`. When processing expressions like `(3 - sqrt(2)*sqrt(4 + 3*I) + 3*I)/2`, the code would extract an empty list of surds and pass it to `_split_gcd(*surds)`, which tried to access `a[0]` on an empty tuple, causing an IndexError.
+
+## Fix Implementation
+I added a simple check at the beginning of `_split_gcd` to handle the empty input case:
+
+```python
+def _split_gcd(*a):
+    """
+    split the list of integers ``a`` into a list of integers, ``a1`` having
+    ``g = gcd(a1)``, and a list ``a2`` whose elements are not divisible by
+    ``g``.  Returns ``g, a1, a2``
+
+    Examples
+    ========
+
+    >>> from sympy.simplify.radsimp import _split_gcd
+    >>> _split_gcd(55, 35, 22, 14, 77, 10)
+    (5, [55, 35, 10], [22, 14, 77])
+    """
+    if not a:
+        return 1, [], []
+    g = a[0]
+    # ... rest of function unchanged
+```
+
+## Test Coverage
+I also added a test case in `sympy/simplify/tests/test_sqrtdenest.py`:
+
+```python
+def test_issue_12420():
+    # Test for IndexError fix when expression cannot be denested
+    from sympy import I
+    expr = (3 - sqrt(2)*sqrt(4 + 3*I) + 3*I)/2
+    # Should not raise IndexError, should return expression unchanged
+    result = sqrtdenest(expr)
+    # The result should be the original expression since it cannot be denested
+    assert result == expr
+```
+
+## Result
+The fix ensures that:
+1. **No IndexError**: The problematic expression now returns unchanged instead of crashing
+2. **Correct behavior**: When an expression cannot be denested, it's returned as-is
+3. **Backward compatibility**: All existing functionality remains unchanged
+4. **Minimal impact**: The fix is a simple 2-line addition that handles the edge case
+
+The expression `sqrtdenest((3 - sqrt(2)*sqrt(4 + 3*I) + 3*I)/2)` now returns `3/2 - sqrt(2)*sqrt(4 + 3*I)/2 + 3*I/2` instead of raising an IndexError.

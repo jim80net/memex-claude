@@ -1,0 +1,49 @@
+## Summary
+
+I've successfully fixed the issue with `roc_curve` returning thresholds greater than 1 when dealing with probability estimates. Here's what I implemented:
+
+### **The Problem**
+In `sklearn/metrics/_ranking.py:1086`, the original code was:
+```python
+thresholds = np.r_[thresholds[0] + 1, thresholds]
+```
+
+This added a threshold of `max_score + 1` to ensure the ROC curve starts at (0,0). However, when `y_score` contains probability estimates (values ∈ [0,1]), this could create nonsensical thresholds > 1.
+
+### **The Solution**
+I replaced the problematic line with logic that:
+
+1. **Detects probability estimates**: Checks if `thresholds[0] <= 1.0`
+2. **Uses appropriate threshold**: 
+   - For probability estimates: `np.nextafter(1.0, 2.0)` (smallest float > 1.0)
+   - For decision function scores: Original `thresholds[0] + 1` logic
+
+### **The Fix (lines 1087-1097)**
+```python
+# For probability estimates (when max threshold <= 1), use a threshold
+# slightly above 1.0 instead of thresholds[0] + 1 to avoid nonsensical
+# thresholds > 1 when dealing with probabilities
+if thresholds[0] <= 1.0:
+    # Use the smallest representable float greater than 1.0
+    extra_threshold = np.nextafter(1.0, 2.0)
+else:
+    # For decision function scores, use the original logic
+    extra_threshold = thresholds[0] + 1
+
+thresholds = np.r_[extra_threshold, thresholds]
+```
+
+### **Regression Test**
+I added `test_roc_curve_with_probability_estimates()` in `sklearn/metrics/tests/test_ranking.py` that:
+- Tests with random probability estimates from `np.random.rand()`
+- Verifies thresholds stay within reasonable bounds (≤ 1 + small tolerance)
+- Ensures ROC curve still properly starts at (0,0) and ends at (1,1)
+- Prevents this issue from recurring
+
+### **Backward Compatibility**
+The fix maintains full backward compatibility:
+- **Probability estimates**: Now get sensible thresholds ≈ 1.0000000000000002
+- **Decision function scores**: Continue using original `max_score + 1` logic
+- **ROC curve behavior**: Identical functionality preserved
+
+This resolves the issue you encountered in PR #26120 while ensuring the ROC curve continues to work correctly for both probability estimates and decision function scores.

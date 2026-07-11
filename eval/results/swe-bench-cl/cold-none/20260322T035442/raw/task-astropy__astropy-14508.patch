@@ -1,0 +1,61 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced89..5095bbdb5d 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,22 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # First try the simple string representation
++    simple_str = str(value)
++
++    # Check if the simple string representation fits in 20 chars
++    if len(simple_str) <= 20:
++        # Ensure it has a decimal point or is in scientific notation
++        if "." in simple_str or "e" in simple_str or "E" in simple_str:
++            # Convert lowercase 'e' to uppercase 'E' for consistency
++            if "e" in simple_str and "E" not in simple_str:
++                simple_str = simple_str.replace("e", "E")
++            return simple_str
++        elif simple_str.isdigit() or (simple_str.startswith("-") and simple_str[1:].isdigit()):
++            # It's an integer representation, add .0
++            return simple_str + ".0"
++
++    # If not suitable, fall back to the original logic
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
+diff --git a/astropy/io/fits/tests/test_header.py b/astropy/io/fits/tests/test_header.py
+index a8f4e1160f..a973171447 100644
+--- a/astropy/io/fits/tests/test_header.py
++++ b/astropy/io/fits/tests/test_header.py
+@@ -137,6 +137,29 @@ class TestHeaderFunctions(FitsTestCase):
+         ):
+             assert str(c) == _pad("FLOATNUM= -4.6737463674763E+32")
+ 
++    def test_float_efficient_formatting(self):
++        """Test that simple floats use efficient string representation.
++
++        This test addresses issue where floats like 0.009125 were being
++        unnecessarily expanded to 0.009124999999999999, causing comment
++        truncation in FITS cards.
++        """
++        # Test the specific problematic value from the issue report
++        c = fits.Card("TEST", 0.009125, "short comment")
++        assert str(c) == _pad("TEST    =              0.009125 / short comment")
++        assert c.comment == "short comment"  # Comment should not be truncated
++
++        # Test negative version
++        c_neg = fits.Card("TEST", -0.009125, "short comment")
++        assert str(c_neg) == _pad("TEST    =             -0.009125 / short comment")
++        assert c_neg.comment == "short comment"  # Comment should not be truncated
++
++        # Test HIERARCH cards which have less space available
++        keyword = "ESO IFM CL RADIUS"
++        comment = "[m] radius arround actuator to avoid"
++        c_hierarch = fits.Card(f"HIERARCH {keyword}", 0.009125, comment)
++        assert c_hierarch.comment == comment  # Should not be truncated with efficient formatting
++
+     def test_complex_value_card(self):
+         """Test Card constructor with complex value"""
+ 

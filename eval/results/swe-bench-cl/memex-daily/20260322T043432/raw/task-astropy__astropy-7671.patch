@@ -1,0 +1,147 @@
+diff --git a/astropy/utils/introspection.py b/astropy/utils/introspection.py
+index 3e784f9fc3..0116865f11 100644
+--- a/astropy/utils/introspection.py
++++ b/astropy/utils/introspection.py
+@@ -4,6 +4,7 @@
+ 
+ 
+ import inspect
++import re
+ import types
+ import importlib
+ from distutils.version import LooseVersion
+@@ -88,6 +89,122 @@ def resolve_name(name, *additional_parts):
+     return ret
+ 
+ 
++def _compare_versions(version1, version2, inclusive=True):
++    """
++    Compare two version strings robustly, working around LooseVersion bugs.
++
++    Parameters
++    ----------
++    version1 : str
++        The first version string to compare.
++    version2 : str
++        The second version string to compare.
++    inclusive : bool
++        If True, perform >= comparison; if False, perform > comparison.
++
++    Returns
++    -------
++    bool
++        True if version1 satisfies the comparison with version2.
++    """
++    try:
++        # First try using LooseVersion directly
++        if inclusive:
++            return LooseVersion(version1) >= LooseVersion(version2)
++        else:
++            return LooseVersion(version1) > LooseVersion(version2)
++    except TypeError:
++        # LooseVersion bug: fallback to custom comparison
++        # Parse version strings to handle dev/rc/alpha suffixes properly
++
++        def parse_version(version_str):
++            """Parse a version string into numeric parts and suffix."""
++            # Regex to extract dotted version numbers and optional suffix
++            version_regex = r'^([0-9]+(?:\.[0-9]+)*)(.*)$'
++            match = re.match(version_regex, version_str)
++
++            if match:
++                numeric_part = match.group(1)
++                suffix = match.group(2).strip()
++
++                # Convert numeric part to list of integers
++                parts = [int(x) for x in numeric_part.split('.')]
++
++                # Classify suffix - development versions are considered lower
++                # than release versions
++                is_dev = 'dev' in suffix.lower()
++
++                return parts, is_dev, suffix
++            else:
++                # Fallback if we can't parse
++                return [0], False, version_str
++
++        parts1, is_dev1, suffix1 = parse_version(version1)
++        parts2, is_dev2, suffix2 = parse_version(version2)
++
++        # Pad shorter version with zeros for comparison
++        max_len = max(len(parts1), len(parts2))
++        parts1.extend([0] * (max_len - len(parts1)))
++        parts2.extend([0] * (max_len - len(parts2)))
++
++        # Compare numeric parts first
++        if parts1 > parts2:
++            return True
++        elif parts1 < parts2:
++            return False
++        else:
++            # Numeric parts are equal after padding
++            # Need to consider both dev suffixes and original version specificity
++
++            # Get original part lengths before padding
++            # Re-extract original numeric parts to determine specificity
++            def get_numeric_part(version_str):
++                version_regex = r'^([0-9]+(?:\.[0-9]+)*)'
++                match = re.match(version_regex, version_str)
++                return match.group(1) if match else version_str
++
++            orig_parts1 = get_numeric_part(version1).split('.')
++            orig_parts2 = get_numeric_part(version2).split('.')
++            orig_len1 = len(orig_parts1)
++            orig_len2 = len(orig_parts2)
++
++            # If one version is more specific (has more parts) and the other is dev,
++            # the more specific version is considered greater
++            if orig_len1 > orig_len2 and is_dev2 and not is_dev1:
++                # version1 is more specific (e.g., 2.1.0) and version2 is dev (e.g., 2.1dev)
++                result = True
++            elif orig_len2 > orig_len1 and is_dev1 and not is_dev2:
++                # version2 is more specific and version1 is dev
++                result = False
++            elif orig_len1 == orig_len2:
++                # Same specificity, use LooseVersion-compatible logic
++                # dev versions are greater than their exact base versions
++                if is_dev1 and not is_dev2:
++                    # version1 is dev, version2 is release: version1 > version2
++                    result = True
++                elif not is_dev1 and is_dev2:
++                    # version1 is release, version2 is dev: version1 < version2
++                    result = False
++                else:
++                    # Both dev or both release: equal
++                    result = True
++            else:
++                # Different specificities but neither condition above met
++                result = True
++
++            # Apply inclusive/exclusive logic
++            if inclusive:
++                return result
++            else:
++                # For non-inclusive, equal versions should return False
++                if not is_dev1 and not is_dev2:  # Both are release versions
++                    return False
++                elif is_dev1 and is_dev2:  # Both are dev versions
++                    return False
++                else:
++                    return result
++
++
+ def minversion(module, version, inclusive=True, version_path='__version__'):
+     """
+     Returns `True` if the specified Python module satisfies a minimum version
+@@ -139,10 +256,7 @@ def minversion(module, version, inclusive=True, version_path='__version__'):
+     else:
+         have_version = resolve_name(module.__name__, version_path)
+ 
+-    if inclusive:
+-        return LooseVersion(have_version) >= LooseVersion(version)
+-    else:
+-        return LooseVersion(have_version) > LooseVersion(version)
++    return _compare_versions(have_version, version, inclusive)
+ 
+ 
+ def find_current_module(depth=1, finddiff=False):

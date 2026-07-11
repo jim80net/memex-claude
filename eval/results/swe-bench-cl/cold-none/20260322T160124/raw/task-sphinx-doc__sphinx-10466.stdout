@@ -1,0 +1,69 @@
+## Summary
+
+I've successfully fixed the duplicate location issue in the Sphinx gettext builder. Here's what I implemented:
+
+### ✅ Problem Analysis
+- **Issue**: `Message.locations` contained duplicate entries when the same location was referenced multiple times for the same translatable message
+- **Root Cause**: No deduplication in the `Message.__init__` method at `sphinx/builders/gettext.py:31-36`
+- **Impact**: Generated `.pot` files contained duplicate `#:` location lines like:
+  ```
+  #: ../../manual/modeling/hair.rst:0
+  #: ../../manual/modeling/hair.rst:0
+  #: ../../manual/modeling/hair.rst:0
+  ```
+
+### ✅ Solution Implemented
+
+**File: `sphinx/builders/gettext.py`**
+```python
+class Message:
+    """An entry of translatable message."""
+    def __init__(self, text: str, locations: List[Tuple[str, int]], uuids: List[str]):
+        self.text = text
+        self.locations = self._deduplicate_locations(locations)  # ← NEW: Deduplicate
+        self.uuids = uuids
+
+    def _deduplicate_locations(self, locations: List[Tuple[str, int]]) -> List[Tuple[str, int]]:
+        """Remove duplicate locations while preserving order of first occurrence."""
+        seen = set()
+        deduplicated = []
+        for location in locations:
+            if location not in seen:
+                seen.add(location)
+                deduplicated.append(location)
+        return deduplicated
+```
+
+### ✅ Key Features of the Fix
+1. **Preserves Order**: Maintains the order of first occurrence of each location
+2. **Efficient**: Uses a set for O(1) lookup while building the deduplicated list
+3. **Backward Compatible**: Doesn't change the API or behavior for non-duplicate cases
+4. **Robust**: Handles edge cases (empty lists, single locations, no duplicates)
+
+### ✅ Test Coverage Added
+
+**File: `tests/test_build_gettext.py`**
+Added comprehensive test `test_gettext_message_deduplication()` with scenarios:
+- Basic deduplication of identical locations
+- Order preservation with mixed duplicates
+- No change when no duplicates exist  
+- Empty location handling
+
+### ✅ Verification
+- ✅ Standalone logic testing confirms deduplication works correctly
+- ✅ Syntax validation passes for both modified files  
+- ✅ Addresses the exact issue described in the user's bug report
+
+### ✅ Expected Result
+After this fix, running `make clean; make gettext` will produce `.pot` files without duplicate location entries. For example:
+```
+# Before (duplicates):
+#: ../../manual/modeling/hair.rst:0
+#: ../../manual/modeling/hair.rst:0  
+#: ../../manual/modeling/hair.rst:0
+
+# After (deduplicated):
+#: ../../manual/modeling/hair.rst:0
+```
+
+The fix is ready for testing in your Blender documentation environment!

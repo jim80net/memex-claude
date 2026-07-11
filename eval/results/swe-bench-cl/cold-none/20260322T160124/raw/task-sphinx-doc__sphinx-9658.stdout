@@ -1,0 +1,52 @@
+## Summary
+
+I've successfully investigated and fixed the Sphinx autodoc bug where inherited classes were not correctly documented when mocked, specifically the issue with incomplete "Bases" section showing `torch.nn.` instead of `torch.nn.Module`.
+
+## Root Cause Analysis
+
+**The Issue:**
+1. In Sphinx 3.4.2, commit `85567748d` fixed issue #8164 by allowing classes that inherit from mocked classes to be documented
+2. However, this exposed a bug in how the `restify()` function handles mocked objects when generating the "Bases" section
+3. Mocked objects have an empty `__qualname__` attribute (`''`) but a proper `__display_name__` attribute (`'torch.nn.Module'`)
+4. The `restify()` function was using the empty `__qualname__`, resulting in incomplete names like `':py:class:`torch.nn.`'`
+
+**The Specific Problem:**
+- Located in `/sphinx/util/typing.py` in the `restify()` function
+- When processing a mocked base class, `restify()` checks `hasattr(cls, '__qualname__')` which returns `True`
+- It then generates `':py:class:`%s.%s`' % (cls.__module__, cls.__qualname__)`
+- Since `cls.__qualname__` is empty, this produces `':py:class:`torch.nn.`'` instead of `':py:class:`torch.nn.Module`'`
+
+## The Fix
+
+I modified the `restify()` function in `/sphinx/util/typing.py` to:
+
+1. **Check for mocked objects early** - Added a check for `hasattr(cls, '__sphinx_mock__')` before the existing logic
+2. **Use the proper display name** - When a mocked object is detected, use its `__display_name__` attribute which contains the full class name
+3. **Maintain compatibility** - The fix only affects mocked objects and doesn't change behavior for regular classes
+
+**Code changes:**
+```python
+# Added after line 119 in restify() function
+elif hasattr(cls, '__sphinx_mock__'):
+    # Handle mocked objects by using their display name
+    from sphinx.ext.autodoc.mock import ismock  # lazy loading
+    if ismock(cls) and hasattr(cls, '__display_name__'):
+        return ':py:class:`%s`' % cls.__display_name__
+```
+
+## Tests Added
+
+I've added comprehensive tests to verify the fix works:
+
+1. **Unit test** in `/tests/test_util_typing.py`:
+   - `test_restify_mocked_object()` - Tests that `restify()` correctly handles mocked objects
+
+2. **Integration test** in `/tests/test_ext_autodoc_automodule.py`:
+   - `test_mocked_class_inheritance_display()` - Tests the complete inheritance display functionality with mocked classes
+
+## Expected Behavior After Fix
+
+- **Before:** Classes inheriting from mocked classes show `Bases: torch.nn.` in documentation
+- **After:** Classes inheriting from mocked classes show `Bases: :py:class:`torch.nn.Module`` in documentation
+
+This fix resolves the issue described in the GitHub issue while maintaining backward compatibility and not affecting the functionality of documenting classes that inherit from mocked classes (which was the original goal of the 3.4.2 fix).

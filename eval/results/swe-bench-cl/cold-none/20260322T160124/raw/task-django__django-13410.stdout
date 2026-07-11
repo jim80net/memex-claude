@@ -1,0 +1,36 @@
+## Summary
+
+I've successfully fixed the bug in Django's POSIX file locking implementation. Here's what was accomplished:
+
+### The Problem
+The POSIX version of `django/core/files/locks.py` had a bug where:
+- `fcntl.flock()` returns `None` on success and raises `OSError` on failure
+- The code incorrectly checked `ret == 0`, causing it to always return `False` 
+- This was especially problematic for non-blocking locks (`LOCK_NB`) where you need to know if the lock was acquired
+
+### The Fix
+I updated both `lock()` and `unlock()` functions in `/eval/workdir/django_django/django/core/files/locks.py`:
+
+```python
+def lock(f, flags):
+    try:
+        fcntl.flock(_fd(f), flags)
+        return True
+    except OSError:
+        return False
+
+def unlock(f):
+    try:
+        fcntl.flock(_fd(f), fcntl.LOCK_UN)
+        return True
+    except OSError:
+        return False
+```
+
+### Verification
+I created and ran tests that confirmed:
+- Lock operations now correctly return `True` on success
+- The old implementation always returned `False` (even on successful locks)
+- The new implementation properly handles both success and failure cases
+
+The fix now allows developers to reliably use non-blocking file locks and determine whether they successfully acquired the lock.

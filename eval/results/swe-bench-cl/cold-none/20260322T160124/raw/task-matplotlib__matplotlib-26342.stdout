@@ -1,0 +1,48 @@
+I've successfully implemented the requested `set_paths` method for the `ContourSet` class. Here's what I accomplished:
+
+## Implementation Summary
+
+**Added to `/eval/workdir/matplotlib_matplotlib/lib/matplotlib/contour.py` (line 1462-1472):**
+```python
+def set_paths(self, paths):
+    """
+    Set the paths for this ContourSet.
+
+    Parameters
+    ----------
+    paths : list of `~matplotlib.path.Path` objects
+        The new paths to use for this ContourSet.
+    """
+    self._paths = paths
+    self.stale = True
+```
+
+**Added to `/eval/workdir/matplotlib_matplotlib/lib/matplotlib/contour.pyi` (line 161):**
+```python
+def set_paths(self, paths: Sequence[Path]) -> None: ...
+```
+
+## Benefits
+
+This enhancement replaces the current Cartopy workaround:
+```python
+# Old workaround (not clean)
+paths = cs.get_paths()
+paths[:] = transformed_paths
+```
+
+With a much cleaner API:
+```python
+# New clean API
+cs.set_paths(transformed_paths)
+```
+
+## Technical Details
+
+- The implementation follows the same pattern as other Collection subclasses like `PathCollection`
+- It properly sets `self.stale = True` to ensure the artist is redrawn when the paths change
+- The method includes proper docstring documentation with parameter types
+- Type hints are provided in the corresponding `.pyi` file
+- Both files pass Python syntax validation
+
+The enhancement maintains backward compatibility while providing a much cleaner API for libraries like Cartopy that need to transform contour paths.

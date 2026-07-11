@@ -1,0 +1,70 @@
+I've successfully identified and fixed the bug in SymPy's `factor` function when using the `extension` parameter.
+
+## Problem Analysis
+
+The issue was that `factor(x*y - x - y + 1, extension=[I])` was returning only `x - 1` instead of the complete factorization `(x - 1)*(y - 1)`. This happened because:
+
+1. The polynomial `x*y - x - y + 1 = (x-1)*(y-1)` factors perfectly over the rationals
+2. When using `extension=[I]`, SymPy's algorithm tries to factor over the algebraic field QQ(I)
+3. The norm-based algorithm for extension fields was incorrectly concluding the polynomial was irreducible when it found only one factor in the norm
+4. This caused it to return only a partial factorization
+
+## Root Cause
+
+The bug was in the `dmp_ext_factor` function in `sympy/polys/factortools.py`. The problematic code was:
+
+```python
+if len(factors) == 1:
+    factors = [f]  # Just return the original polynomial as irreducible
+```
+
+This logic assumed that if the norm computation finds only one factor, the original polynomial must be irreducible. But this isn't true for multivariate polynomials that factor over the base field.
+
+## Solution
+
+I modified the `dmp_ext_factor` function to add a fallback mechanism:
+
+```python
+if len(factors) == 1:
+    # Try to factor over the base field first before falling back to extension field methods
+    f_base = dmp_convert(f, u, K, K.dom)
+    try:
+        base_coeff, base_factors = dmp_factor_list(f_base, u, K.dom)
+        if len(base_factors) > 1 or (len(base_factors) == 1 and base_factors[0][1] > 1):
+            # Polynomial factors over the base field, convert factors to extension field
+            factors = []
+            for factor, mult in base_factors:
+                factor_ext = dmp_convert(factor, u, K.dom, K)
+                factors.append(factor_ext)
+        else:
+            # Polynomial doesn't factor over base field, use original approach
+            factors = [f]
+    except:
+        # If factoring over base field fails, use original approach
+        factors = [f]
+```
+
+## Test Case Added
+
+I also added a comprehensive test case to prevent regression:
+
+```python
+def test_factor_extension_missing_factors():
+    # Test for the issue where factor(poly, extension=[I]) drops factors
+    # that don't involve the extension elements
+    z = expand((x-1)*(y-1))  # z = x*y - x - y + 1
+    assert factor(z) == (x - 1)*(y - 1)
+    # The following should not drop the (y-1) factor
+    assert factor(z, extension=[I]) == (x - 1)*(y - 1)
+
+    # Also test that normal extension factorization still works
+    # (polynomials that actually need the extension)
+    w = x**2 + 1
+    assert factor(w, extension=[I]) == (x - I)*(x + I)
+```
+
+## Why This Fix Works
+
+The fix is based on the mathematical principle that if a polynomial factors over a base field (like QQ), it factors the same way over any extension field (like QQ(I)). The norm-based approach is only needed for polynomials that actually require the extension elements for factorization.
+
+My fix provides a fallback: when the extension field algorithm fails to find all factors, it tries the simpler base field factorization first. This resolves the specific bug while preserving all existing functionality.

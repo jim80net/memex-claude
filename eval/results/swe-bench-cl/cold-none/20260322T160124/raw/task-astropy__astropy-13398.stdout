@@ -1,0 +1,68 @@
+Thank you for sharing this thoughtful approach to improving ITRS to observed coordinate transformations in astropy. After examining the current coordinate transformation system, I can provide some analysis of your proposed solution.
+
+## Current State Analysis
+
+I've reviewed the current transformation system in astropy:
+
+- **Current path**: ITRS ↔ CIRS ↔ AltAz/HADec (via `cirs_observed_transforms.py`)
+- **No direct ITRS transformations** currently exist to AltAz/HADec
+- **The problem you identified** is real - current ITRS→ITRS transforms via `intermediate_rotation_transforms.py` do reference coordinates to the SSB rather than keeping them Earth-bound
+
+Looking at `test_straight_overhead()`, I can see the complexity of the current workaround - creating topocentric CIRS positions manually to avoid the aberration issues.
+
+## Assessment of Your Approach
+
+Your proposed solution has several strong technical merits:
+
+### Strengths
+1. **Conceptual clarity**: Staying within ITRS makes sense for Earth-bound objects like satellites, aircraft, buildings
+2. **Mathematical soundness**: Your rotation matrices correctly implement the geodetic to topocentric coordinate transformations
+3. **Simplicity**: Direct geometric transformations avoid the complex aberration corrections needed in the CIRS path
+4. **Time invariance**: Treating ITRS positions as time-invariant for local transformations is appropriate
+
+### Technical Details
+```python
+# Your approach: Direct ITRS → AltAz matrix
+minus_x @ rotation_matrix(PIOVER2 - elat, 'y') @ rotation_matrix(elong, 'z')
+```
+
+This correctly implements:
+- Rotation by longitude around Earth's axis
+- Rotation by colatitude to align with local horizon
+- Coordinate handedness correction for AltAz
+
+The HADec transformation similarly handles the geodetic-to-topocentric conversion directly.
+
+## Considerations for Implementation
+
+### Integration with Existing System
+1. **Backward compatibility**: Your transforms should be registered alongside existing ones, not replace them initially
+2. **Test coverage**: The existing test suite (especially `test_intermediate_transformations.py`) should pass
+3. **Performance**: Direct matrix operations should be faster than the CIRS chain
+
+### Edge Cases to Consider
+1. **Refraction**: You mentioned adding refraction support - this would be important for parity with current transforms
+2. **High precision requirements**: Consider numerical accuracy compared to ERFA-based approaches
+3. **Geodetic vs geocentric**: Ensure consistent handling of Earth's ellipsoid
+
+### Validation Strategy
+I'd suggest:
+1. **Cross-validation** against current transforms for distant objects (where aberration differences are minimal)
+2. **Specific tests** for nearby objects where your approach should be superior
+3. **Performance benchmarks** to quantify improvements
+
+## Recommendation
+
+**Yes, this approach appears technically sound and addresses a real limitation.** The astropy community would likely be receptive to this contribution, especially given:
+
+- The recurring user issues you mentioned (like #13319)
+- The clear technical rationale
+- The potential for improved accuracy for near-Earth objects
+
+I'd suggest moving forward with the PR, ensuring:
+- Comprehensive tests including edge cases
+- Documentation explaining when to use direct ITRS vs CIRS-based transforms
+- Performance comparisons
+- Clear migration path for existing users
+
+This looks like a valuable enhancement that could resolve long-standing confusion around topocentric transformations in astropy.

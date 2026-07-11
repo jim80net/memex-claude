@@ -1,0 +1,208 @@
+diff --git a/lib/matplotlib/backends/backend_agg.py b/lib/matplotlib/backends/backend_agg.py
+index 7d038a998f..a1749a88fd 100644
+--- a/lib/matplotlib/backends/backend_agg.py
++++ b/lib/matplotlib/backends/backend_agg.py
+@@ -188,8 +188,14 @@ class RendererAgg(RendererBase):
+ 
+     def draw_mathtext(self, gc, x, y, s, prop, angle):
+         """Draw mathtext using :mod:`matplotlib.mathtext`."""
+-        ox, oy, width, height, descent, font_image = \
+-            self.mathtext_parser.parse(s, self.dpi, prop)
++        # Temporarily set the antialiasing rcParam to match the graphics context
++        old_antialiased = mpl.rcParams['text.antialiased']
++        mpl.rcParams['text.antialiased'] = gc.get_antialiased()
++        try:
++            ox, oy, width, height, descent, font_image = \
++                self.mathtext_parser.parse(s, self.dpi, prop)
++        finally:
++            mpl.rcParams['text.antialiased'] = old_antialiased
+ 
+         xd = descent * sin(radians(angle))
+         yd = descent * cos(radians(angle))
+@@ -206,7 +212,7 @@ class RendererAgg(RendererBase):
+         # space) in the following call to draw_text_image).
+         font.set_text(s, 0, flags=get_hinting_flag())
+         font.draw_glyphs_to_bitmap(
+-            antialiased=mpl.rcParams['text.antialiased'])
++            antialiased=gc.get_antialiased())
+         d = font.get_descent() / 64.0
+         # The descent needs to be adjusted for the angle.
+         xo, yo = font.get_bitmap_offset()
+diff --git a/lib/matplotlib/backends/backend_cairo.py b/lib/matplotlib/backends/backend_cairo.py
+index 9ccadcdf1c..7f1888b4dd 100644
+--- a/lib/matplotlib/backends/backend_cairo.py
++++ b/lib/matplotlib/backends/backend_cairo.py
+@@ -205,7 +205,7 @@ class RendererCairo(RendererBase):
+             ctx.set_font_size(self.points_to_pixels(prop.get_size_in_points()))
+             opts = cairo.FontOptions()
+             opts.set_antialias(
+-                cairo.ANTIALIAS_DEFAULT if mpl.rcParams["text.antialiased"]
++                cairo.ANTIALIAS_DEFAULT if gc.get_antialiased()
+                 else cairo.ANTIALIAS_NONE)
+             ctx.set_font_options(opts)
+             if angle:
+diff --git a/lib/matplotlib/tests/test_text.py b/lib/matplotlib/tests/test_text.py
+index f86b9f111b..2dff5fab92 100644
+--- a/lib/matplotlib/tests/test_text.py
++++ b/lib/matplotlib/tests/test_text.py
+@@ -902,3 +902,83 @@ def test_annotate_offset_fontsize():
+     points_coords, fontsize_coords = [ann.get_window_extent() for ann in anns]
+     fig.canvas.draw()
+     assert str(points_coords) == str(fontsize_coords)
++
++
++def test_text_antialiasing():
++    """Test that Text objects can get/set antialiasing independently."""
++    # Test basic get/set functionality
++    text = Text(0, 0, "test")
++
++    # Test setting antialiasing to opposite of default
++    text.set_antialiased(not mpl.rcParams['text.antialiased'])
++    assert text.get_antialiased() == (not mpl.rcParams['text.antialiased'])
++
++    # Test that None resets to rcParams value
++    text.set_antialiased(None)
++    assert text.get_antialiased() == mpl.rcParams['text.antialiased']
++
++    # Test setting explicit values
++    text.set_antialiased(True)
++    assert text.get_antialiased() is True
++
++    text.set_antialiased(False)
++    assert text.get_antialiased() is False
++
++
++def test_text_antialiasing_annotation():
++    """Test that Annotation inherits antialiasing functionality from Text."""
++    from matplotlib.text import Annotation
++
++    # Test that Annotation accepts antialiased parameter
++    ann = Annotation("test", (0, 0), antialiased=True)
++    assert ann.get_antialiased() is True
++
++    ann = Annotation("test", (0, 0), antialiased=False)
++    assert ann.get_antialiased() is False
++
++    # Test that Annotation can use get/set methods
++    ann.set_antialiased(True)
++    assert ann.get_antialiased() is True
++
++
++def test_text_antialiasing_backend_integration():
++    """Test that Text antialiasing setting is passed to graphics context."""
++    import matplotlib.backend_bases as backend_bases
++
++    # Create a mock renderer that tracks graphics context antialiasing calls
++    class MockGraphicsContext(backend_bases.GraphicsContextBase):
++        def __init__(self):
++            super().__init__()
++            self.antialiased_calls = []
++
++        def set_antialiased(self, b):
++            self.antialiased_calls.append(b)
++            super().set_antialiased(b)
++
++    class MockRenderer(backend_bases.RendererBase):
++        def __init__(self):
++            super().__init__()
++            self.gc_calls = []
++
++        def new_gc(self):
++            gc = MockGraphicsContext()
++            self.gc_calls.append(gc)
++            return gc
++
++        def get_canvas_width_height(self):
++            return 100, 100
++
++        def draw_text(self, gc, x, y, s, prop, angle, ismath=False, mtext=None):
++            pass  # Mock implementation
++
++    # Test that antialiasing is set on graphics context during draw
++    text = Text(0, 0, "test", antialiased=True)
++    renderer = MockRenderer()
++
++    # Force draw to call new_gc and set antialiasing
++    text.draw(renderer)
++
++    # Check that graphics context was created and antialiasing was set
++    assert len(renderer.gc_calls) > 0
++    gc = renderer.gc_calls[0]
++    assert True in gc.antialiased_calls  # antialiasing was set to True
+diff --git a/lib/matplotlib/text.py b/lib/matplotlib/text.py
+index 4591316cf9..f8f8662f68 100644
+--- a/lib/matplotlib/text.py
++++ b/lib/matplotlib/text.py
+@@ -115,6 +115,7 @@ class Text(Artist):
+                  wrap=False,
+                  transform_rotates_text=False,
+                  parse_math=None,    # defaults to rcParams['text.parse_math']
++                 antialiased=None,   # defaults to rcParams['text.antialiased']
+                  **kwargs
+                  ):
+         """
+@@ -149,6 +150,7 @@ class Text(Artist):
+             transform_rotates_text=transform_rotates_text,
+             linespacing=linespacing,
+             rotation_mode=rotation_mode,
++            antialiased=antialiased,
+         )
+         self.update(kwargs)
+ 
+@@ -167,6 +169,7 @@ class Text(Artist):
+         transform_rotates_text=False,
+         linespacing=None,
+         rotation_mode=None,
++        antialiased=None,
+     ):
+         self.set_text(text)
+         self.set_color(
+@@ -187,6 +190,7 @@ class Text(Artist):
+             linespacing = 1.2  # Maybe use rcParam later.
+         self.set_linespacing(linespacing)
+         self.set_rotation_mode(rotation_mode)
++        self.set_antialiased(antialiased)
+ 
+     def update(self, kwargs):
+         # docstring inherited
+@@ -736,6 +740,7 @@ class Text(Artist):
+             gc = renderer.new_gc()
+             gc.set_foreground(self.get_color())
+             gc.set_alpha(self.get_alpha())
++            gc.set_antialiased(self.get_antialiased())
+             gc.set_url(self._url)
+             self._set_gc_clip(gc)
+ 
+@@ -880,6 +885,10 @@ class Text(Artist):
+         """
+         return self._verticalalignment
+ 
++    def get_antialiased(self):
++        """Return whether antialiasing is used for text rendering."""
++        return self._antialiased
++
+     def get_window_extent(self, renderer=None, dpi=None):
+         """
+         Return the `.Bbox` bounding the text, in display units.
+@@ -1078,6 +1087,21 @@ class Text(Artist):
+         self._fontproperties.set_size(fontsize)
+         self.stale = True
+ 
++    def set_antialiased(self, antialiased):
++        """
++        Set whether to use antialiased rendering for text.
++
++        Parameters
++        ----------
++        antialiased : bool or None
++            Whether to use antialiasing for text. If None, defaults to
++            :rc:`text.antialiased`.
++        """
++        if antialiased is None:
++            antialiased = mpl.rcParams['text.antialiased']
++        self._antialiased = antialiased
++        self.stale = True
++
+     def get_math_fontfamily(self):
+         """
+         Return the font family name for math text rendered by Matplotlib.

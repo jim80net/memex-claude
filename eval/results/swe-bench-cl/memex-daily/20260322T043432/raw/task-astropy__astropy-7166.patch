@@ -1,0 +1,52 @@
+diff --git a/astropy/utils/misc.py b/astropy/utils/misc.py
+index de3fb01d18..cceaeb957f 100644
+--- a/astropy/utils/misc.py
++++ b/astropy/utils/misc.py
+@@ -528,7 +528,7 @@ class InheritDocstrings(type):
+                 not key.startswith('_'))
+ 
+         for key, val in dct.items():
+-            if (inspect.isfunction(val) and
++            if ((inspect.isfunction(val) or isinstance(val, property)) and
+                 is_public_member(key) and
+                 val.__doc__ is None):
+                 for base in cls.__mro__[1:]:
+diff --git a/astropy/utils/tests/test_misc.py b/astropy/utils/tests/test_misc.py
+index 4f632e8d15..80ca36c30a 100644
+--- a/astropy/utils/tests/test_misc.py
++++ b/astropy/utils/tests/test_misc.py
+@@ -89,6 +89,34 @@ def test_inherit_docstrings():
+         assert Subclass.__call__.__doc__ == "FOO"
+ 
+ 
++def test_inherit_docstrings_property():
++    """Test that InheritDocstrings works with properties."""
++
++    class Base(metaclass=misc.InheritDocstrings):
++        @property
++        def my_property(self):
++            """Base property docstring."""
++            return "base_value"
++
++        def regular_method(self):
++            """Base method docstring."""
++            return "base_method"
++
++    class Subclass(Base):
++        @property
++        def my_property(self):
++            # No docstring - should inherit from Base
++            return "sub_value"
++
++        def regular_method(self):
++            # No docstring - should inherit from Base
++            return "sub_method"
++
++    # Test that both properties and methods inherit docstrings
++    assert Subclass.my_property.__doc__ == "Base property docstring."
++    assert Subclass.regular_method.__doc__ == "Base method docstring."
++
++
+ def test_set_locale():
+     # First, test if the required locales are available
+     current = locale.setlocale(locale.LC_ALL)

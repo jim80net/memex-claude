@@ -1,0 +1,58 @@
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 85cd8311a7..9041fa1752 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -1225,6 +1225,11 @@ class QuerySet:
+         if self.query.extra_order_by or self.query.order_by:
+             return True
+         elif self.query.default_ordering and self.query.get_meta().ordering:
++            # When there's a GROUP BY clause and only default ordering,
++            # Django removes the default ordering from the SQL, so the
++            # QuerySet is effectively not ordered.
++            if self.query.group_by:
++                return False
+             return True
+         else:
+             return False
+diff --git a/tests/queries/tests.py b/tests/queries/tests.py
+index f9a57b088a..af08b7b27c 100644
+--- a/tests/queries/tests.py
++++ b/tests/queries/tests.py
+@@ -2084,6 +2084,37 @@ class QuerysetOrderedTests(unittest.TestCase):
+         self.assertIs(qs.ordered, False)
+         self.assertIs(qs.order_by('num_notes').ordered, True)
+ 
++    def test_annotated_ordering_with_meta_ordering(self):
++        """
++        Test that QuerySet.ordered correctly returns False for GROUP BY queries
++        on models with Meta.ordering.
++
++        When a model has Meta.ordering and an annotation creates a GROUP BY,
++        Django removes the default ordering from the SQL, and the ordered
++        property should reflect this by returning False.
++        """
++        # Tag has Meta.ordering = ['name']
++        # Normal queryset should be ordered
++        self.assertIs(Tag.objects.all().ordered, True)
++
++        # With annotation (creates GROUP BY), the default ordering is removed
++        qs = Tag.objects.annotate(note_count=Count('note'))
++
++        # This should be False because GROUP BY removes default ordering
++        self.assertIs(qs.ordered, False)
++
++        # Verify that the actual SQL doesn't contain ORDER BY
++        from django.db import connection
++        compiler = qs.query.get_compiler('default')
++        sql, params = compiler.as_sql()
++        # The SQL should not contain ORDER BY when there's GROUP BY
++        # (unless explicitly ordered)
++        self.assertNotIn('ORDER BY', sql.upper())
++
++        # But if we add explicit ordering, it should be ordered again
++        qs_explicit = qs.order_by('name')
++        self.assertIs(qs_explicit.ordered, True)
++
+ 
+ @skipUnlessDBFeature('allow_sliced_subqueries_with_in')
+ class SubqueryTests(TestCase):

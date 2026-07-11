@@ -1,0 +1,62 @@
+## Summary
+
+I have successfully identified and fixed the `IndexError: tuple index out of range` issue in the `identify_format` function. Here's what I found and how I fixed it:
+
+### **Root Cause Analysis**
+
+The issue was in the `is_fits` function in `/eval/workdir/astropy_astropy/astropy/io/fits/connect.py` at line 72. The problem occurred due to a code simplification in commit `2a0c5c6f5b` that introduced a bug:
+
+**Before (working code):**
+```python
+elif isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU)):
+    return True
+else:
+    return False
+```
+
+**After (buggy code):**
+```python
+return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
+```
+
+The simplified version tried to access `args[0]` without checking if `args` was empty, causing an `IndexError` when called with an empty `args` tuple.
+
+### **The Fix**
+
+I changed line 72 in `astropy/io/fits/connect.py`:
+
+```diff
+- return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++ return len(args) > 0 and isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
+```
+
+This fix ensures that:
+1. We check if `args` has any elements before trying to access `args[0]`
+2. If `args` is empty, the function returns `False` (original behavior)
+3. If `args[0]` exists and is a FITS HDU object, it returns `True`
+4. If `args[0]` exists but is not a FITS HDU object, it returns `False`
+
+### **Testing**
+
+I added a comprehensive regression test in `astropy/io/fits/tests/test_connect.py`:
+
+```python
+def test_is_fits_with_empty_args():
+    """Test that is_fits doesn't crash with empty args for non-FITS files."""
+    from astropy.io.fits.connect import is_fits
+
+    # Test cases that were previously failing
+    assert is_fits("write", "test.ecsv", None) is False
+    assert is_fits("write", "test.fits", None) is True
+    assert is_fits("write", "test.txt", None, BinTableHDU()) is True
+    # ... more test cases
+```
+
+### **Verification**
+
+The fix resolves the exact issue reported:
+- `identify_format("write", Table, "bububu.ecsv", None, [], {})` now works correctly
+- Returns `False` for non-FITS files with empty args (instead of crashing)
+- Maintains all existing functionality for FITS files and HDU objects
+
+The fix is minimal, safe, and preserves the original behavior while preventing the IndexError crash.

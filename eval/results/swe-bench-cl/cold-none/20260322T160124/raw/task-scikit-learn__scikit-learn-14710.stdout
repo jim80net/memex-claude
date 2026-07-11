@@ -1,0 +1,67 @@
+Perfect! I've successfully identified and fixed the bug with `HistGradientBoostingClassifier` when using string targets with early stopping. Here's a summary of what I've done:
+
+## Bug Analysis
+
+The issue occurred in the `_check_early_stopping_scorer` method where:
+
+1. **Root Cause**: During training, string labels like `['class_x', 'class_y']` get encoded to integers `[0, 1]` for internal processing
+2. **Problem**: During early stopping, the scorer receives integer-encoded `y_true` but string `y_pred` from `self.predict()`
+3. **Error**: When `accuracy_score` tries to compare them, NumPy fails because it can't sort mixed integer/string arrays
+
+## Solution
+
+I implemented the fix suggested in the issue by modifying the `_check_early_stopping_scorer` method:
+
+**File**: `sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py:423-446`
+
+```python
+def _check_early_stopping_scorer(self, X_binned_small_train, y_small_train,
+                                 X_binned_val, y_val):
+    """Check if fitting should be early-stopped based on scorer.
+
+    Scores are computed on validation data or on training data.
+    """
+    # For classification, decode y from integers back to original classes
+    # so they match the format of self.predict() output
+    if hasattr(self, 'classes_'):
+        y_small_train = self.classes_[y_small_train.astype(int)]
+
+    self.train_score_.append(
+        self.scorer_(self, X_binned_small_train, y_small_train)
+    )
+
+    if self._use_validation_data:
+        if hasattr(self, 'classes_'):
+            y_val = self.classes_[y_val.astype(int)]
+        self.validation_score_.append(
+            self.scorer_(self, X_binned_val, y_val)
+        )
+        return self._should_stop(self.validation_score_)
+    else:
+        return self._should_stop(self.train_score_)
+```
+
+**Key Features of the Fix**:
+- **Safe**: Only applies to classifiers (checks `hasattr(self, 'classes_')`)
+- **Non-intrusive**: Doesn't affect regression models or classifiers without string labels
+- **Robust**: Works with both validation and training-only early stopping
+
+## Tests Added
+
+I added comprehensive tests in `test_gradient_boosting.py`:
+
+1. **`test_string_target_early_stopping()`**: Basic test with binary string classes
+2. **`test_early_stopping_with_different_target_types()`**: Parametrized test covering:
+   - String vs numeric targets  
+   - With/without validation data
+   - Multi-class scenarios
+
+## Verification
+
+The fix ensures that:
+- ✅ String targets work with early stopping (both validation and training-only)
+- ✅ Numeric targets continue to work unchanged (regression test)
+- ✅ Multi-class string classification works correctly
+- ✅ Both binary and multi-class scenarios are covered
+
+This resolves the `TypeError: '<' not supported between instances of 'str' and 'float'` error when using `HistGradientBoostingClassifier` with string targets and early stopping enabled.

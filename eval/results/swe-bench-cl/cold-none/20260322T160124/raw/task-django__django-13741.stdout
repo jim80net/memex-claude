@@ -1,0 +1,28 @@
+## Summary
+
+I've successfully implemented the requested feature to set the `disabled` prop on `ReadOnlyPasswordHashField` by default. Here's what was accomplished:
+
+### Changes Made:
+
+1. **Modified `ReadOnlyPasswordHashField`** (`django/contrib/auth/forms.py:54-63`):
+   - Added `kwargs.setdefault("disabled", True)` to set disabled=True by default
+   - Removed the manual `bound_data` method since Django's Field base class handles this automatically when disabled=True
+
+2. **Updated `UserChangeForm`** (`django/contrib/auth/forms.py:142-161`):
+   - Removed the `clean_password` method since it's no longer needed - the disabled field automatically ignores posted data
+
+3. **Added tests** (`tests/auth_tests/test_forms.py:1026-1035`):
+   - `test_readonly_field_disabled_by_default` - verifies field is disabled by default
+   - `test_readonly_field_disabled_behavior` - verifies disabled field returns initial value
+
+4. **Updated documentation** (`docs/topics/auth/customizing.txt:1129-1138`):
+   - Removed the `clean_password` method from the example custom UserChangeForm
+
+### Benefits:
+
+- **Simpler API**: Custom forms no longer need to implement `clean_password` 
+- **More secure**: Uses Django's robust built-in disabled field functionality
+- **Eliminates pitfalls**: Prevents issues when developers forget to implement `clean_password`
+- **Cleaner code**: Reduces boilerplate in both Django core and user applications
+
+The existing test `test_bug_19133` should continue to pass since the disabled field behavior is identical to the previous manual implementation - any posted password data is ignored in favor of the initial value.

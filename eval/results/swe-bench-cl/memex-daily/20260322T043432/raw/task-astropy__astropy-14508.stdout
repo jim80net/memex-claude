@@ -1,0 +1,31 @@
+## Summary
+
+I've successfully fixed the `io.fits.Card` float formatting issue! Here's what I accomplished:
+
+### **Problem Fixed** ✅
+- **Issue**: `0.009125` was being unnecessarily expanded to `0.009124999999999999`, forcing comment truncation
+- **Root cause**: The `_format_float()` function immediately used `.16G` formatting, introducing precision artifacts
+
+### **Solution Implemented** 🔧
+**File modified**: `astropy/io/fits/card.py:1300-1328`
+
+The improved `_format_float()` function now:
+1. **Tries `str(value)` first** - uses Python's natural representation
+2. **Preserves short, accurate formats** - keeps `0.009125` as `0.009125` (8 chars vs 20)
+3. **Handles scientific notation** - normalizes `e` to `E` with proper padding
+4. **Falls back gracefully** - uses original behavior for very long numbers
+5. **Maintains compatibility** - all existing functionality preserved
+
+### **Results** 📊
+- **Space saved**: 12 characters in the example case
+- **Accuracy preserved**: No unnecessary precision expansion
+- **Comments protected**: More space available, less truncation
+- **All tests pass**: No regressions introduced
+
+### **Key Improvement**
+```python
+# Before: 0.009125 → "0.009124999999999999" (20 chars)
+# After:  0.009125 → "0.009125" (8 chars)
+```
+
+The fix directly addresses the issue described in your GitHub issue, allowing FITS cards with float values like `0.009125` to preserve their compact, accurate representation and prevent unnecessary comment truncation.

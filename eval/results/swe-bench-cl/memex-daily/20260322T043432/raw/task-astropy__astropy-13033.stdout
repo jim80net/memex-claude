@@ -1,0 +1,43 @@
+## Summary
+
+I've successfully fixed the misleading exception in TimeSeries when required column checks fail. Here's what was done:
+
+### The Problem
+When users set additional required columns (like `["time", "flux"]`) and then tried to remove one of them (like `"flux"`), the error message was misleading:
+
+```
+ValueError: TimeSeries object is invalid - expected 'time' as the first columns but found 'time'
+```
+
+This confused users because the `time` column was correctly positioned, but the real issue was that required columns were missing.
+
+### The Solution
+
+**Modified `/eval/workdir/astropy_astropy/astropy/timeseries/core.py`:**
+
+- Enhanced the `_check_required_columns()` method (lines 77-82) to distinguish between two error scenarios:
+  1. **Missing required columns**: When required columns have been removed from the table
+  2. **Wrong column order**: When required columns exist but are in the wrong position
+
+- Added logic to detect missing columns and provide clear, specific error messages:
+  - Single missing column: `"TimeSeries object is invalid - required column 'flux' is missing"`
+  - Multiple missing columns: `"TimeSeries object is invalid - required columns 'flux', 'temp' are missing"`
+  - Wrong order (preserves original behavior): `"TimeSeries object is invalid - expected 'time' as the first column but found 'flux'"`
+
+**Updated tests in `/eval/workdir/astropy_astropy/astropy/timeseries/tests/test_sampled.py`:**
+
+- Updated existing test cases to expect the new, more informative error messages
+- Added a new test function `test_required_columns_missing_specific()` that specifically tests the user's reported scenario
+
+### Key Benefits
+
+1. **Clear error messages**: Users now get precise information about which required columns are missing
+2. **Backward compatibility**: Column order errors still show the original error message format
+3. **Better debugging experience**: Developers can quickly identify and fix missing required column issues
+
+The fix correctly handles all scenarios:
+- ✅ Single missing required column
+- ✅ Multiple missing required columns  
+- ✅ Wrong column order (original behavior preserved)
+- ✅ No columns at all
+- ✅ Correct configuration (no false positives)

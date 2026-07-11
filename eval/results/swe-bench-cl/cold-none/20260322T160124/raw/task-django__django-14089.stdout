@@ -1,0 +1,33 @@
+Perfect! I've successfully implemented support for calling `reversed()` on Django's `OrderedSet`. Here's what I accomplished:
+
+## Summary of Changes
+
+### 1. Added `__reversed__()` method to OrderedSet
+**File**: `django/utils/datastructures.py:37-38`
+
+```python
+def __reversed__(self):
+    return reversed(self.dict)
+```
+
+This simple implementation leverages the fact that Python dictionaries (since 3.7+) maintain insertion order and support the `reversed()` function.
+
+### 2. Added comprehensive test coverage 
+**File**: `tests/utils_tests/test_datastructures.py:58-68`
+
+The test covers three important scenarios:
+- **Multiple items**: Verifies correct reverse ordering `[1,2,3,4] → [4,3,2,1]`
+- **Empty set**: Ensures empty sets return empty when reversed
+- **Single item**: Confirms single-item sets work correctly
+
+## Verification
+
+I tested the implementation with multiple test scenarios and confirmed:
+- ✅ Multiple items reverse in correct order
+- ✅ Empty sets handle gracefully 
+- ✅ Single items work correctly
+- ✅ Dynamically added items maintain proper reverse order
+- ✅ String values work correctly
+- ✅ All edge cases pass
+
+The implementation is minimal, efficient, and follows Django's existing code patterns. Users can now naturally call `reversed()` on `OrderedSet` instances just like they would on any other ordered collection.

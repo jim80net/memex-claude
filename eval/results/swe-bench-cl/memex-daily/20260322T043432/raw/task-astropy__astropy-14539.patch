@@ -1,0 +1,62 @@
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8c..d3608ef01d 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1449,7 +1449,7 @@ class TableDataDiff(_BaseDiff):
+                 arrb.dtype, np.floating
+             ):
+                 diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+-            elif "P" in col.format:
++            elif "P" in col.format or "Q" in col.format:
+                 diffs = (
+                     [
+                         idx
+diff --git a/astropy/io/fits/tests/test_diff.py b/astropy/io/fits/tests/test_diff.py
+index adfebe6a5b..d44a83547b 100644
+--- a/astropy/io/fits/tests/test_diff.py
++++ b/astropy/io/fits/tests/test_diff.py
+@@ -601,6 +601,44 @@ class TestDiff(FitsTestCase):
+         assert "13 different table data element(s) found (65.00% different)" in report
+         assert report.count("more indices") == 1
+ 
++    def test_identical_vla_qd_format(self):
++        """
++        Regression test for VLA (Variable Length Array) comparison bug.
++
++        This tests the specific case where FITSDiff incorrectly reports
++        differences between identical files containing QD format columns.
++        See: https://github.com/astropy/astropy/issues/...
++        """
++        # Create VLA column with QD format as in the bug report
++        col = Column('a', format='QD', array=[[0], [0, 0]])
++        hdu = BinTableHDU.from_columns([col])
++
++        # Test that comparing the same data to itself shows no differences
++        diff = TableDataDiff(hdu.data, hdu.data)
++        assert diff.identical, "Identical VLA data should show no differences"
++        assert diff.diff_total == 0, "Diff total should be 0 for identical data"
++        assert len(diff.diff_values) == 0, "No diff values should be found for identical data"
++
++        # Also test FITSDiff level comparison by writing to temp files
++        hdu.writeto(self.temp('vla_test.fits'), overwrite=True)
++        fitsdiff = FITSDiff(self.temp('vla_test.fits'), self.temp('vla_test.fits'))
++        assert fitsdiff.identical, "FITSDiff should show identical files as identical"
++
++        # Also test with PD format to ensure P format still works correctly
++        col_p = Column('b', format='PD', array=[[1.0], [2.0, 3.0]])
++        hdu_p = BinTableHDU.from_columns([col_p])
++        diff_p = TableDataDiff(hdu_p.data, hdu_p.data)
++        assert diff_p.identical, "Identical VLA data with P format should show no differences"
++
++        # Test that actual differences in VLA data are still detected
++        col1 = Column('a', format='QD', array=[[0], [0, 0]])
++        col2 = Column('a', format='QD', array=[[1], [0, 0]])  # Different data
++        hdu1 = BinTableHDU.from_columns([col1])
++        hdu2 = BinTableHDU.from_columns([col2])
++        diff_different = TableDataDiff(hdu1.data, hdu2.data)
++        assert not diff_different.identical, "Different VLA data should show differences"
++        assert diff_different.diff_total > 0, "Diff total should be > 0 for different data"
++
+     def test_identical_files_basic(self):
+         """Test identicality of two simple, extensionless files."""
+ 

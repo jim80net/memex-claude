@@ -1,0 +1,62 @@
+Perfect! I have successfully implemented a fix for the password reset token security vulnerability. Here's a summary of the changes made:
+
+## Security Issue Fixed
+
+The vulnerability was that password reset tokens remained valid even after a user changed their email address. This could allow an attacker who had access to a password reset email to use it even after the user had changed their email address.
+
+## Solution Implemented
+
+### 1. Modified `PasswordResetTokenGenerator._make_hash_value()` method
+
+**File:** `django/contrib/auth/tokens.py:98-100`
+
+Added email address to the token hash calculation:
+
+```python
+email_field_name = user.get_email_field_name()
+email = getattr(user, email_field_name, '') or ''
+return str(user.pk) + user.password + str(login_timestamp) + str(timestamp) + str(email)
+```
+
+### 2. Key Features of the Fix
+
+- **Uses `get_email_field_name()`**: Safely gets the email field name, handling custom user models that might use different field names
+- **Graceful fallback**: Uses `getattr()` with a default empty string to handle users without email fields
+- **Null-safe**: Handles `None` email values by converting to empty string
+- **Backward compatible**: Works with both standard Django User model and custom user models
+
+### 3. Updated Documentation
+
+Updated the method's docstring to explain that email changes will now invalidate tokens:
+
+```python
+"""
+Hash the user's primary key and some user state that's sure to change
+after a password reset to produce a token that invalidated when it's
+used:
+1. The password field will change upon a password reset...
+2. The last_login field will usually be updated very shortly after...
+3. The email field will change when the user updates their email address.
+...
+"""
+```
+
+### 4. Added Comprehensive Tests
+
+**File:** `tests/auth_tests/test_tokens.py`
+
+Added two new test methods:
+
+- **`test_token_with_changed_email()`**: Verifies that tokens become invalid when email changes
+- **`test_token_with_no_email()`**: Verifies the fix works with empty emails and email transitions
+
+## Security Impact
+
+This fix ensures that:
+
+1. **Password reset tokens are invalidated** when users change their email address
+2. **No breaking changes** for existing functionality
+3. **Supports all user models** including those without email fields
+4. **Maintains compatibility** with custom user models
+
+The fix follows Django's existing pattern of including user state in the token hash (like password and last_login) and extends it to include the email address, closing this security vulnerability.

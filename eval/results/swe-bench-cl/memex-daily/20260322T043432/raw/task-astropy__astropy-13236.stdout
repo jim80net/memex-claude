@@ -1,0 +1,46 @@
+Based on my analysis, here's a comprehensive plan for implementing the deprecation:
+
+## Summary of Findings
+
+1. **Current Code**: The auto-transformation happens in `Table._convert_data_to_col()` (lines 1244-1247)
+2. **Original Rationale**: Structured dtype `Column` didn't work well, especially for serialization
+3. **What Changed**: PR #12644 made structured arrays fully supported in regular `Column`, `MaskedColumn`, and `Quantity` columns
+4. **Impact**: The original justification for `NdarrayMixin` auto-transformation no longer applies
+
+## Proposed Implementation Plan
+
+### Phase 1: Add FutureWarning (for 5.1)
+```python
+# In table.py lines 1244-1247, replace current code with:
+if (not isinstance(data, Column) and not data_is_mixin
+        and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+    warnings.warn(
+        "Structured numpy arrays are automatically converted to NdarrayMixin. "
+        "In astropy 5.2, they will be stored as regular Column objects instead. "
+        "To suppress this warning and get the new behavior now, "
+        "wrap the array in Column(data) before adding to the table.",
+        FutureWarning, stacklevel=3
+    )
+    data = data.view(NdarrayMixin)
+    data_is_mixin = True
+```
+
+### Phase 2: Remove Auto-transformation (for 5.2)
+Simply remove the entire `if` block, allowing structured arrays to be handled as regular `Column` objects.
+
+## Key Considerations
+
+1. **Test Updates**: The existing `test_ndarray_mixin()` will need modification to account for the new behavior
+2. **Documentation**: Update table documentation to reflect that structured arrays become `Column` objects
+3. **Backward Compatibility**: Users relying on `NdarrayMixin` behavior will need to explicitly create `NdarrayMixin` objects
+4. **Serialization**: Verify that structured `Column` objects serialize properly in all supported formats (ECSV, FITS, HDF5)
+
+## Benefits of This Change
+
+1. **Consistency**: Structured arrays will behave consistently with other column types
+2. **Simplification**: Removes special-case handling that's no longer necessary
+3. **User Control**: Users can still create `NdarrayMixin` explicitly if needed
+
+The change aligns well with the principle of least surprise - users adding structured arrays to tables would naturally expect them to become `Column` objects, not a special mixin type.
+
+Would you like me to implement this deprecation approach, or would you prefer to discuss any aspects of the plan further?

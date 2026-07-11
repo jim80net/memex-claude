@@ -1,0 +1,35 @@
+## Summary
+
+I've successfully identified and fixed the bug in `DateFormat.Y()` where it wasn't zero-padding years less than 1000.
+
+### Problem
+The `Y` format specifier in `django.utils.dateformat.DateFormat` was returning the raw year value instead of a zero-padded 4-digit string for years < 1000. According to the docstring, it should return "Year, 4 digits; e.g. '1999'".
+
+### Root Cause
+In `/eval/workdir/django_django/django/utils/dateformat.py:315-317`, the `Y()` method was implemented as:
+```python
+def Y(self):
+    "Year, 4 digits; e.g. '1999'"
+    return self.data.year  # Returns raw integer
+```
+
+### Fix Applied
+I changed the implementation to return a zero-padded 4-digit string:
+```python
+def Y(self):
+    "Year, 4 digits; e.g. '1999'"
+    return '%04d' % self.data.year  # Returns zero-padded string
+```
+
+### Test Added
+I also added a new test method `test_year_before_1000_y_format()` to the test suite at `/eval/workdir/django_django/tests/utils_tests/test_dateformat.py` to ensure this behavior is properly tested going forward.
+
+### Verification
+The fix has been tested and confirmed to work correctly:
+
+- **Years < 1000**: Now returns zero-padded strings (e.g., `999` → `"0999"`, `42` → `"0042"`, `5` → `"0005"`)
+- **Years ≥ 1000**: Still works as before (e.g., `1979` → `"1979"`, `2023` → `"2023"`)
+- **Format function**: Both the `DateFormat.Y()` method and the `format(datetime, 'Y')` convenience function work correctly
+- **Complex format strings**: Works properly in complex format strings like `'jS F Y'` → `'31st December 0042'`
+
+The fix is minimal, targeted, and maintains backward compatibility while resolving the zero-padding issue for years before 1000.

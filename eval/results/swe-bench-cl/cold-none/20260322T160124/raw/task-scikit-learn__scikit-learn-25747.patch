@@ -1,0 +1,143 @@
+diff --git a/sklearn/tests/test_pipeline.py b/sklearn/tests/test_pipeline.py
+index fa7fa2ad20..66838653b9 100644
+--- a/sklearn/tests/test_pipeline.py
++++ b/sklearn/tests/test_pipeline.py
+@@ -1620,6 +1620,64 @@ def test_feature_union_set_output():
+     assert_array_equal(X_trans.index, X_test.index)
+ 
+ 
++def test_feature_union_set_output_with_aggregating_transformer():
++    """Test FeatureUnion with pandas output and aggregating transformers.
++
++    Non-regression test for the bug where transformers that reduce the number of rows
++    (like aggregation operations) fail when pandas output is enabled.
++    """
++    pd = pytest.importorskip("pandas")
++
++    class AggregatingTransformer(BaseEstimator, TransformerMixin):
++        """Transformer that aggregates data by taking mean of every 2 rows."""
++
++        def fit(self, X, y=None):
++            return self
++
++        def transform(self, X):
++            # Aggregate every 2 rows by taking mean
++            if hasattr(X, 'iloc'):  # pandas DataFrame
++                n_groups = len(X) // 2
++                result_data = []
++                for i in range(n_groups):
++                    start_idx = i * 2
++                    end_idx = start_idx + 2
++                    group_mean = X.iloc[start_idx:end_idx].mean()
++                    result_data.append(group_mean.values)
++                result = pd.DataFrame(result_data, columns=X.columns)
++                return result
++            else:  # numpy array
++                n_groups = X.shape[0] // 2
++                result = np.zeros((n_groups, X.shape[1]))
++                for i in range(n_groups):
++                    start_idx = i * 2
++                    end_idx = start_idx + 2
++                    result[i] = X[start_idx:end_idx].mean(axis=0)
++                return result
++
++        def get_feature_names_out(self, input_features=None):
++            return np.asarray(input_features or ["feature_0", "feature_1"], dtype=object)
++
++    # Create test data with even number of rows
++    X = pd.DataFrame({
++        'feature_0': [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
++        'feature_1': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
++    })
++
++    # Create FeatureUnion with aggregating transformer
++    union = FeatureUnion([("aggregator", AggregatingTransformer())])
++    union.set_output(transform="pandas")
++    union.fit(X)
++
++    # This should not raise ValueError due to index length mismatch
++    X_trans = union.transform(X)
++
++    # Verify the output is correct
++    assert isinstance(X_trans, pd.DataFrame)
++    assert X_trans.shape == (3, 2)  # 6 rows -> 3 rows (aggregated)
++    assert_array_equal(X_trans.columns, union.get_feature_names_out())
++
++
+ def test_feature_union_getitem():
+     """Check FeatureUnion.__getitem__ returns expected results."""
+     scalar = StandardScaler()
+diff --git a/sklearn/utils/_set_output.py b/sklearn/utils/_set_output.py
+index 335773c6af..24ac87aa88 100644
+--- a/sklearn/utils/_set_output.py
++++ b/sklearn/utils/_set_output.py
+@@ -56,9 +56,15 @@ def _wrap_in_pandas_container(
+         if columns is not None:
+             data_to_wrap.columns = columns
+         if index is not None:
+-            data_to_wrap.index = index
++            # Only set index if length matches to avoid aggregation issues
++            if len(index) == len(data_to_wrap):
++                data_to_wrap.index = index
++            # If lengths don't match (e.g. due to aggregation), keep original index
+         return data_to_wrap
+ 
++    # Only use index if length matches data to avoid aggregation issues
++    if index is not None and len(index) != len(data_to_wrap):
++        index = None
+     return pd.DataFrame(data_to_wrap, index=index, columns=columns)
+ 
+ 
+diff --git a/sklearn/utils/tests/test_set_output.py b/sklearn/utils/tests/test_set_output.py
+index ac73ca0943..6f91b0b51b 100644
+--- a/sklearn/utils/tests/test_set_output.py
++++ b/sklearn/utils/tests/test_set_output.py
+@@ -260,3 +260,48 @@ def test_set_output_mro():
+         pass
+ 
+     assert C().transform(None) == "B"
++
++
++def test__wrap_in_pandas_container_index_length_mismatch():
++    """Check _wrap_in_pandas_container handles index length mismatch gracefully.
++
++    When transformers aggregate data and reduce the number of rows,
++    the original input's index may not match the output DataFrame length.
++    This should not raise an error.
++
++    Non-regression test for FeatureUnion pandas output issue.
++    """
++    pd = pytest.importorskip("pandas")
++
++    # Simulate aggregated data: original had 4 rows, aggregated has 2 rows
++    original_index = pd.Index([0, 1, 2, 3])
++    aggregated_data = pd.DataFrame([[1.0, 2.0], [3.0, 4.0]], columns=["a", "b"])
++
++    # This should not raise ValueError due to length mismatch
++    result = _wrap_in_pandas_container(
++        aggregated_data,
++        columns=["feature_0", "feature_1"],
++        index=original_index
++    )
++
++    # Should have kept the aggregated data's original index
++    assert len(result) == 2
++    assert result.columns.tolist() == ["feature_0", "feature_1"]
++    # Index should not be changed when lengths don't match
++    pd.testing.assert_index_equal(result.index, aggregated_data.index)
++
++    # Test with numpy array input (aggregated)
++    aggregated_array = np.array([[1.0, 2.0], [3.0, 4.0]])
++
++    # This should not raise ValueError and should ignore the mismatched index
++    result_array = _wrap_in_pandas_container(
++        aggregated_array,
++        columns=["feature_0", "feature_1"],
++        index=original_index
++    )
++
++    # Should have default index when length mismatch occurs
++    assert len(result_array) == 2
++    assert result_array.columns.tolist() == ["feature_0", "feature_1"]
++    # Index should be default range index when lengths don't match
++    pd.testing.assert_index_equal(result_array.index, pd.RangeIndex(2))

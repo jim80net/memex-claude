@@ -1,0 +1,55 @@
+## Summary
+
+I've successfully fixed the stackplot CN color issue. Here's what was implemented:
+
+### Problem
+The `stackplot` function was throwing a `ValueError: Cannot put cycle reference ('C2') in prop_cycler` when using 'CN' color aliases like 'C0', 'C1', etc. This happened because `stackplot` was trying to directly set the property cycle with CN colors, but the prop_cycle validation specifically prevents cycle references from being used.
+
+### Solution
+I implemented a color resolution mechanism in `/eval/workdir/matplotlib_matplotlib/lib/matplotlib/stackplot.py`:
+
+#### Changes Made:
+
+1. **Added imports** for color handling:
+   ```python
+   from matplotlib import colors as mcolors
+   import matplotlib as mpl
+   ```
+
+2. **Created `_resolve_colors()` helper function** that converts 'CN' colors to actual color values:
+   - Checks if colors are CN-style using `mcolors._is_nth_color()`
+   - Resolves CN colors by looking up the current property cycle
+   - Uses modulo arithmetic to handle high CN numbers (wrapping around)
+   - Preserves non-CN colors unchanged
+
+3. **Modified stackplot function** to use resolved colors:
+   ```python
+   if colors is not None:
+       # Resolve CN-style color references before setting prop_cycle
+       resolved_colors = _resolve_colors(colors)
+       axes.set_prop_cycle(color=resolved_colors)
+   ```
+
+### Backward Compatibility
+✅ The fix maintains full backward compatibility:
+- Regular color names work unchanged (`'red'`, `'blue'`, etc.)
+- Hex colors work unchanged (`'#ff0000'`)
+- Named colors work unchanged (`'tab:orange'`)
+- No colors parameter works unchanged
+- Mixed color types work correctly (`['C0', 'red', 'C2']`)
+
+### Testing
+Created comprehensive tests that verify:
+- CN colors are resolved correctly
+- Mixed color types work
+- Backward compatibility is maintained
+- Edge cases are handled (high CN numbers, empty lists, etc.)
+
+### Example Usage
+Now this works without errors:
+```python
+ax.stackplot([1, 2, 3], my_data, colors=['C0', 'C1', 'C2'])
+ax.stackplot([1, 2, 3], my_data, colors=['C0', 'red', 'C3'])
+```
+
+The fix resolves the issue while ensuring that all existing stackplot functionality continues to work exactly as before.

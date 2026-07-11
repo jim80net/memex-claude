@@ -1,0 +1,58 @@
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8efb..78e42b7d63 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,8 +57,8 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+diff --git a/astropy/io/ascii/tests/test_rst.py b/astropy/io/ascii/tests/test_rst.py
+index 84d6fed401..157b3fec3d 100644
+--- a/astropy/io/ascii/tests/test_rst.py
++++ b/astropy/io/ascii/tests/test_rst.py
+@@ -185,3 +185,38 @@ Col1      Col2 Col3 Col4
+ ==== ========= ==== ====
+ """,
+     )
++
++
++def test_rst_header_rows():
++    """Test RST writer with header_rows parameter"""
++    # Create test data with units
++    tbl = [
++        "|     nm |       ct |",
++        "|   wave | response |",
++        "|  350.0 |      0.7 |",
++        "|  950.0 |      1.2 |",
++    ]
++
++    # Test reading with header_rows
++    header_rows = ["unit", "name"]
++    dat = ascii.read(tbl, format="rst", delimiter="|", header_rows=header_rows)
++    assert_equal(dat.colnames, ["wave", "response"])
++
++    # Test that units were properly assigned
++    assert_equal(dat["wave"].info.unit, "nm")
++    assert_equal(dat["response"].info.unit, "ct")
++
++    # Test writing with header_rows
++    out = StringIO()
++    ascii.write(dat, out, format="rst", delimiter=" ", header_rows=header_rows)
++
++    expected = """\
++==== ========
++  nm       ct
++wave response
++==== ========
++350.0      0.7
++950.0      1.2
++==== ========
++"""
++    assert_equal_splitlines(out.getvalue(), expected)

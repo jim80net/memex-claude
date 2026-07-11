@@ -1,0 +1,47 @@
+diff --git a/sympy/printing/repr.py b/sympy/printing/repr.py
+index c936a692c0..d69c39c47f 100644
+--- a/sympy/printing/repr.py
++++ b/sympy/printing/repr.py
+@@ -305,6 +305,15 @@ def _print_DMP(self, p):
+             ringstr = ""
+         return "%s(%s, %s%s)" % (cls, rep, dom, ringstr)
+ 
++    def _print_dict(self, expr):
++        items = []
++        for key, value in expr.items():
++            items.append("%s: %s" % (self._print(key), self._print(value)))
++        return "{%s}" % ", ".join(items)
++
++    def _print_set(self, expr):
++        return "{%s}" % self.reprify(expr, ", ")
++
+     def _print_MonogenicFiniteExtension(self, ext):
+         # The expanded tree shown by srepr(ext.modulus)
+         # is not practical.
+diff --git a/sympy/printing/tests/test_repr.py b/sympy/printing/tests/test_repr.py
+index f749683ff7..e22478d55e 100644
+--- a/sympy/printing/tests/test_repr.py
++++ b/sympy/printing/tests/test_repr.py
+@@ -99,6 +99,22 @@ def test_list():
+     sT([x, Integer(4)], "[Symbol('x'), Integer(4)]")
+ 
+ 
++def test_dict():
++    sT({x: y}, "{Symbol('x'): Symbol('y')}")
++    sT({Integer(1): x, Integer(2): y}, "{Integer(1): Symbol('x'), Integer(2): Symbol('y')}")
++
++
++def test_set():
++    # Note: set order is not guaranteed, so we test with a single element first
++    sT({x}, "{Symbol('x')}")
++    # For multiple elements, check that srepr works but don't check exact order
++    from sympy.printing import srepr
++    result = srepr({x, y})
++    assert "Symbol('x')" in result
++    assert "Symbol('y')" in result
++    assert result.startswith("{") and result.endswith("}")
++
++
+ def test_Matrix():
+     for cls, name in [(Matrix, "MutableDenseMatrix"), (ImmutableDenseMatrix, "ImmutableDenseMatrix")]:
+         sT(cls([[x**+1, 1], [y, x + y]]),

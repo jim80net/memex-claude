@@ -1,0 +1,142 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 000e2e8d3..592d316c5 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -1155,11 +1155,41 @@ class PythonDomain(Domain):
+                     elif name in self.objects and self.objects[name].objtype in objtypes:
+                         newname = name
+                     else:
+-                        # "fuzzy" searching mode
++                        # "fuzzy" searching mode with scope-aware matching
+                         searchname = '.' + name
+-                        matches = [(oname, self.objects[oname]) for oname in self.objects
+-                                   if oname.endswith(searchname) and
+-                                   self.objects[oname].objtype in objtypes]
++                        matches = []
++
++                        # Prioritize matches by scope proximity:
++                        # 1. Current class scope (modname.classname.name)
++                        # 2. Current module scope (modname.*.name)
++                        # 3. Global scope (only for top-level names or when no module context)
++
++                        class_scoped_matches = []
++                        module_scoped_matches = []
++                        global_scoped_matches = []
++
++                        for oname in self.objects:
++                            if (oname.endswith(searchname) and
++                                self.objects[oname].objtype in objtypes):
++
++                                # Check if this is in the current class scope
++                                if (modname and classname and
++                                    oname.startswith(modname + '.' + classname + '.')):
++                                    class_scoped_matches.append((oname, self.objects[oname]))
++                                # Check if this is in the current module scope
++                                elif modname and oname.startswith(modname + '.'):
++                                    module_scoped_matches.append((oname, self.objects[oname]))
++                                # Only consider global scope for top-level names or when no module context
++                                elif not modname or '.' not in oname:
++                                    global_scoped_matches.append((oname, self.objects[oname]))
++
++                        # Return matches in order of scope priority
++                        if class_scoped_matches:
++                            matches = class_scoped_matches
++                        elif module_scoped_matches:
++                            matches = module_scoped_matches
++                        elif global_scoped_matches:
++                            matches = global_scoped_matches
+         else:
+             # NOTE: searching for exact match, object type is not considered
+             if name in self.objects:
+diff --git a/tests/test_domain_py.py b/tests/test_domain_py.py
+index e0c690518..d34daea3e 100644
+--- a/tests/test_domain_py.py
++++ b/tests/test_domain_py.py
+@@ -923,6 +923,87 @@ def test_noindexentry(app):
+     assert_node(doctree[2], addnodes.index, entries=[])
+ 
+ 
++def test_variable_linking_issue():
++    """Test that instance variables don't incorrectly link to global variables with same name.
++
++    This test reproduces the issue described in the bug report where instance variables
++    documented with :ivar: incorrectly link to global variables with the same name.
++    """
++    from sphinx.domains.python import PythonDomain
++    from sphinx.environment import BuildEnvironment
++    from unittest.mock import Mock
++
++    # Create a mock environment
++    env = Mock(spec=BuildEnvironment)
++    env.domaindata = {'py': {'objects': {}, 'modules': {}}}
++
++    # Create the Python domain
++    domain = PythonDomain(env)
++
++    # Add objects: a global variable and an instance variable with the same name
++    domain.objects['module.somevar'] = ('doc1', 'module.somevar', 'data', False)
++    domain.objects['module.MyClass.somevar'] = ('doc2', 'module.MyClass.somevar', 'attribute', False)
++
++    # Test case 1: Looking for 'somevar' in the context of MyClass should not return the global variable
++    # The bug is that the fuzzy search would match both the global variable and instance variable
++    matches = domain.find_obj(env, 'module', 'MyClass', 'somevar', 'attr', 1)
++
++    # Should only find the instance variable, not the global one
++    assert len(matches) == 1
++    assert matches[0][0] == 'module.MyClass.somevar'
++    assert matches[0][1].objtype == 'attribute'
++
++    # Test case 2: Looking for 'somevar' without class context should find the global variable
++    matches_global = domain.find_obj(env, 'module', None, 'somevar', 'data', 1)
++    assert len(matches_global) == 1
++    assert matches_global[0][0] == 'module.somevar'
++    assert matches_global[0][1].objtype == 'data'
++
++    # Test case 3: Fuzzy search should respect scope - when looking for 'somevar'
++    # in class context, it shouldn't fallback to unrelated global variables
++    domain.objects.clear()
++    domain.objects['module.somevar'] = ('doc1', 'module.somevar', 'data', False)
++    domain.objects['other.MyClass.somevar'] = ('doc2', 'other.MyClass.somevar', 'attribute', False)
++
++    # Looking for 'somevar' in the context of a different module+class should not match
++    # the global variable from another module
++    matches_scoped = domain.find_obj(env, 'other', 'MyClass', 'somevar', 'attr', 1)
++
++    # Should find the correctly scoped instance variable
++    assert len(matches_scoped) == 1
++    assert matches_scoped[0][0] == 'other.MyClass.somevar'
++
++    # Test case 4: After fix, fuzzy search should NOT find unrelated variables
++    domain.objects.clear()
++    domain.objects['module1.somevar'] = ('doc1', 'module1.somevar', 'data', False)
++
++    # Looking for instance variable that doesn't exist should not fallback to unrelated global var
++    matches_fixed = domain.find_obj(env, 'module2', 'MyClass', 'somevar', 'attr', 1)
++
++    # After the fix, this should return empty list (no unrelated matches)
++    assert len(matches_fixed) == 0, "Should not find unrelated variables from other modules"
++
++    # Test case 5: Verify scope priority works correctly
++    domain.objects.clear()
++    domain.objects['mymodule.somevar'] = ('doc1', 'mymodule.somevar', 'data', False)  # module scope
++    domain.objects['mymodule.MyClass.somevar'] = ('doc2', 'mymodule.MyClass.somevar', 'attribute', False)  # class scope
++    domain.objects['othermodule.OtherClass.somevar'] = ('doc3', 'othermodule.OtherClass.somevar', 'attribute', False)  # different scope
++
++    # When looking for 'somevar' in mymodule.MyClass context, should prefer class scope
++    matches_priority = domain.find_obj(env, 'mymodule', 'MyClass', 'somevar', 'attr', 1)
++
++    assert len(matches_priority) == 1
++    assert matches_priority[0][0] == 'mymodule.MyClass.somevar'
++    assert matches_priority[0][1].objtype == 'attribute'
++
++    # Test case 6: When no class scope match exists, should fall back to module scope
++    matches_module_fallback = domain.find_obj(env, 'mymodule', 'NonExistentClass', 'somevar', 'data', 1)
++
++    assert len(matches_module_fallback) == 1
++    assert matches_module_fallback[0][0] == 'mymodule.somevar'
++    assert matches_module_fallback[0][1].objtype == 'data'
++
++
+ @pytest.mark.sphinx('dummy', testroot='domain-py-xref-warning')
+ def test_warn_missing_reference(app, status, warning):
+     app.build()

@@ -15,3 +15,15 @@ bin/*.dll
 bin/.install-*
 bin/.install.log
 bin/.installing.lock
+.gitnexus
+
+eval/data/
+# eval/results/ is tracked — pilot and summary results are checked in
+# But per-task raw outputs (patches, stdout, stderr, snapshots) are too large
+eval/results/**/raw/task-*.patch
+eval/results/**/raw/task-*.stdout
+eval/results/**/raw/task-*.stderr
+eval/results/**/raw/task-*.meta.json
+eval/results/**/snapshots/
+eval/results/**/eval-logs/
+logs/

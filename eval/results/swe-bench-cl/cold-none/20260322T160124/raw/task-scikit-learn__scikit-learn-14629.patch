@@ -1,0 +1,130 @@
+diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
+index 95669a212c..f92c6a63da 100644
+--- a/sklearn/model_selection/_validation.py
++++ b/sklearn/model_selection/_validation.py
+@@ -798,6 +798,39 @@ def cross_val_predict(estimator, X, y=None, groups=None, cv=None,
+         return predictions[inv_test_indices]
+ 
+ 
++def _get_estimator_classes(estimator, i_label=None):
++    """Get classes for estimator, handling MultiOutputClassifier case.
++
++    Parameters
++    ----------
++    estimator : estimator object
++        The fitted estimator.
++    i_label : int, optional
++        Label index for MultiOutputClassifier. If None, return all classes.
++
++    Returns
++    -------
++    classes : array-like
++        The classes for the estimator or specific label.
++    """
++    if hasattr(estimator, 'classes_'):
++        # Standard estimator or ClassifierChain
++        if i_label is None:
++            return estimator.classes_
++        else:
++            return estimator.classes_[i_label]
++    elif hasattr(estimator, 'estimators_'):
++        # MultiOutputClassifier
++        if i_label is None:
++            # Return list of classes for all estimators
++            return [est.classes_ for est in estimator.estimators_]
++        else:
++            return estimator.estimators_[i_label].classes_
++    else:
++        raise AttributeError(f"Estimator {type(estimator)} does not have "
++                           "'classes_' or 'estimators_' attribute")
++
++
+ def _fit_and_predict(estimator, X, y, train, test, verbose, fit_params,
+                      method):
+     """Fit estimator and predict values for a given dataset split.
+@@ -856,14 +889,14 @@ def _fit_and_predict(estimator, X, y, train, test, verbose, fit_params,
+     if method in ['decision_function', 'predict_proba', 'predict_log_proba']:
+         if isinstance(predictions, list):
+             predictions = [_enforce_prediction_order(
+-                estimator.classes_[i_label], predictions[i_label],
++                _get_estimator_classes(estimator, i_label), predictions[i_label],
+                 n_classes=len(set(y[:, i_label])), method=method)
+                 for i_label in range(len(predictions))]
+         else:
+             # A 2D y array should be a binary label indicator matrix
+             n_classes = len(set(y)) if y.ndim == 1 else y.shape[1]
+             predictions = _enforce_prediction_order(
+-                estimator.classes_, predictions, n_classes, method)
++                _get_estimator_classes(estimator), predictions, n_classes, method)
+     return predictions, test
+ 
+ 
+diff --git a/sklearn/model_selection/tests/test_validation.py b/sklearn/model_selection/tests/test_validation.py
+index 6fa2e4fee5..51a81db443 100644
+--- a/sklearn/model_selection/tests/test_validation.py
++++ b/sklearn/model_selection/tests/test_validation.py
+@@ -55,6 +55,7 @@ from sklearn.metrics import r2_score
+ from sklearn.metrics.scorer import check_scoring
+ 
+ from sklearn.linear_model import Ridge, LogisticRegression, SGDClassifier
++from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+ from sklearn.linear_model import PassiveAggressiveClassifier, RidgeClassifier
+ from sklearn.ensemble import RandomForestClassifier
+ from sklearn.neighbors import KNeighborsClassifier
+@@ -70,6 +71,7 @@ from io import StringIO
+ from sklearn.base import BaseEstimator
+ from sklearn.base import clone
+ from sklearn.multiclass import OneVsRestClassifier
++from sklearn.multioutput import MultiOutputClassifier
+ from sklearn.utils import shuffle
+ from sklearn.datasets import make_classification
+ from sklearn.datasets import make_multilabel_classification
+@@ -1718,3 +1720,48 @@ def test_score():
+     fit_and_score_args = [None, None, None, two_params_scorer]
+     assert_raise_message(ValueError, error_message,
+                          _score, *fit_and_score_args)
++
++
++def test_cross_val_predict_multioutput_classifier():
++    """Test that cross_val_predict works with MultiOutputClassifier.
++
++    This is a regression test for the issue where cross_val_predict
++    with method='predict_proba' would fail with AttributeError
++    when used with MultiOutputClassifier because it tried to access
++    estimator.classes_ which doesn't exist for MultiOutputClassifier.
++    """
++    # Create multilabel classification data
++    X, y = make_multilabel_classification(n_samples=50, n_features=5,
++                                          n_labels=2, n_classes=3,
++                                          random_state=42)
++
++    # Test with LinearDiscriminantAnalysis as base estimator
++    # (this is what was used in the original bug report)
++    mo_lda = MultiOutputClassifier(LinearDiscriminantAnalysis())
++
++    # Test predict method (should work)
++    pred = cross_val_predict(mo_lda, X, y, cv=3)
++    assert pred.shape == y.shape, f"Expected shape {y.shape}, got {pred.shape}"
++
++    # Test predict_proba method (this was failing before the fix)
++    pred_proba = cross_val_predict(mo_lda, X, y, cv=3, method='predict_proba')
++    assert isinstance(pred_proba, list), "predict_proba should return a list"
++    assert len(pred_proba) == y.shape[1], f"Expected {y.shape[1]} outputs, got {len(pred_proba)}"
++
++    # Check that each output has correct shape
++    for i, proba in enumerate(pred_proba):
++        n_classes_for_label = len(np.unique(y[:, i]))
++        expected_shape = (X.shape[0], n_classes_for_label)
++        assert proba.shape == expected_shape, \
++            f"Output {i}: expected shape {expected_shape}, got {proba.shape}"
++
++    # Test predict_log_proba method
++    pred_log_proba = cross_val_predict(mo_lda, X, y, cv=3, method='predict_log_proba')
++    assert isinstance(pred_log_proba, list), "predict_log_proba should return a list"
++    assert len(pred_log_proba) == y.shape[1], f"Expected {y.shape[1]} outputs, got {len(pred_log_proba)}"
++
++    # Test with different base estimator
++    mo_lr = MultiOutputClassifier(LogisticRegression(solver='liblinear', random_state=0))
++    pred_proba_lr = cross_val_predict(mo_lr, X, y, cv=3, method='predict_proba')
++    assert isinstance(pred_proba_lr, list), "predict_proba should return a list"
++    assert len(pred_proba_lr) == y.shape[1], f"Expected {y.shape[1]} outputs, got {len(pred_proba_lr)}"

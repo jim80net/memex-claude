@@ -1,0 +1,38 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced89..26a3ceb282 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,33 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # Try using Python's default string representation first
++    str_value = str(value)
++
++    # Check if it fits in 20 characters and already has proper formatting
++    if len(str_value) <= 20:
++        # Handle scientific notation case - make sure it matches FITS format
++        if 'e' in str_value.lower():
++            # Convert to uppercase E and normalize exponent format
++            if 'e' in str_value:
++                str_value = str_value.replace('e', 'E')
++
++            if "E" in str_value:
++                significand, exponent = str_value.split("E")
++                if exponent[0] in ("+", "-"):
++                    sign = exponent[0]
++                    exponent = exponent[1:]
++                else:
++                    sign = ""
++                str_value = f"{significand}E{sign}{int(exponent):02d}"
++
++        # Check if we need to add .0 for integers represented as float
++        elif "." not in str_value:
++            str_value += ".0"
++
++        return str_value
++
++    # Fall back to the original implementation if str() doesn't fit in 20 chars
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"

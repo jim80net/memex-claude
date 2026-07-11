@@ -1,0 +1,38 @@
+## Summary
+
+I've successfully identified and fixed the TensorProduct powers evaluation issue. Here's what I accomplished:
+
+### 🔧 **Root Cause Identified**
+The problem was in the `tensor_product_simp` function - when it encountered powers like `tp(1,1)**2`, it would try to simplify the base and then raise it to the power again, but never actually expanded the power into multiplication where simplification could occur.
+
+### ✅ **Fix Implemented** 
+Modified `/eval/workdir/sympy_sympy/sympy/physics/quantum/tensorproduct.py` to detect powers of TensorProducts and expand them into multiplications before simplifying:
+
+```python
+elif isinstance(e, Pow):
+    # Handle powers of TensorProducts by expanding into multiplication
+    if isinstance(e.base, TensorProduct) and e.exp.is_integer and e.exp > 0:
+        # Expand TensorProduct**n into TensorProduct * TensorProduct * ...
+        expanded = e.base
+        for _ in range(int(e.exp) - 1):
+            expanded = expanded * e.base
+        return tensor_product_simp(expanded)
+    else:
+        return tensor_product_simp(e.base) ** e.exp
+```
+
+### 🧪 **Tests Added**
+Added comprehensive tests in `/eval/workdir/sympy_sympy/sympy/physics/quantum/tests/test_tensorproduct.py` covering:
+- Simple scalar cases: `tp(1,1)**2`
+- Symbol cases: `tp(A,B)**2` 
+- Pauli matrix cases: `tp(1,Pauli(3))**2`
+- Higher powers: `tp(A,B)**3`
+
+### ✨ **Results**
+After this fix, all the examples from your issue should now work correctly:
+
+- `tensor_product_simp(tp(1,1)*tp(1,1))` → `tp(1,1)` ✅
+- `tensor_product_simp(tp(1,1)**2)` → `tp(1,1)` ✅  
+- `tensor_product_simp(tp(1,Pauli(3))**2)` → `tp(1,1)` ✅
+
+The fix works by expanding powers into multiplications (e.g., `tp(1,1)**2` becomes `tp(1,1) * tp(1,1)`) and then letting the existing `tensor_product_simp_Mul` function handle the simplification properly.

@@ -1,0 +1,67 @@
+diff --git a/django/template/defaultfilters.py b/django/template/defaultfilters.py
+index 1c844580c6..b2eba2e4b4 100644
+--- a/django/template/defaultfilters.py
++++ b/django/template/defaultfilters.py
+@@ -10,7 +10,7 @@ from urllib.parse import quote
+ 
+ from django.utils import formats
+ from django.utils.dateformat import format, time_format
+-from django.utils.encoding import iri_to_uri
++from django.utils.encoding import force_str, iri_to_uri
+ from django.utils.html import (
+     avoid_wrapping, conditional_escape, escape, escapejs,
+     json_script as _json_script, linebreaks, strip_tags, urlize as _urlize,
+@@ -680,7 +680,16 @@ def add(value, arg):
+         try:
+             return value + arg
+         except Exception:
+-            return ''
++            # Handle lazy strings (gettext_lazy, etc.) by forcing them to strings
++            try:
++                # Only convert to string if either value appears to be a lazy string
++                if hasattr(value, '__class__') and value.__class__.__name__ == '__proxy__':
++                    value = force_str(value)
++                if hasattr(arg, '__class__') and arg.__class__.__name__ == '__proxy__':
++                    arg = force_str(arg)
++                return value + arg
++            except Exception:
++                return ''
+ 
+ 
+ @register.filter(is_safe=False)
+diff --git a/tests/template_tests/filter_tests/test_add.py b/tests/template_tests/filter_tests/test_add.py
+index 0fcc661f4a..d3a6d012d4 100644
+--- a/tests/template_tests/filter_tests/test_add.py
++++ b/tests/template_tests/filter_tests/test_add.py
+@@ -2,6 +2,7 @@ from datetime import date, timedelta
+ 
+ from django.template.defaultfilters import add
+ from django.test import SimpleTestCase
++from django.utils.translation import gettext_lazy as _
+ 
+ from ..utils import setup
+ 
+@@ -51,3 +52,23 @@ class FunctionTests(SimpleTestCase):
+ 
+     def test_add(self):
+         self.assertEqual(add('1', '2'), 3)
++
++    def test_add_lazy_strings(self):
++        """Test that add filter works with lazy strings (translation strings)."""
++        # Regular string concatenation should work
++        result1 = add("Hello", " World")
++        self.assertEqual(result1, "Hello World")
++
++        # Lazy string + regular string should work
++        lazy_hello = _("Hello")
++        result2 = add(lazy_hello, " World")
++        self.assertEqual(result2, "Hello World")
++
++        # Regular string + lazy string should work
++        lazy_world = _(" World")
++        result3 = add("Hello", lazy_world)
++        self.assertEqual(result3, "Hello World")
++
++        # Lazy string + lazy string should work
++        result4 = add(lazy_hello, lazy_world)
++        self.assertEqual(result4, "Hello World")

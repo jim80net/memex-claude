@@ -1,0 +1,84 @@
+diff --git a/src/_pytest/mark/structures.py b/src/_pytest/mark/structures.py
+index 800a25c92..04f84e1a2 100644
+--- a/src/_pytest/mark/structures.py
++++ b/src/_pytest/mark/structures.py
+@@ -357,10 +357,25 @@ class MarkDecorator:
+ 
+ def get_unpacked_marks(obj: object) -> Iterable[Mark]:
+     """Obtain the unpacked marks that are stored on an object."""
+-    mark_list = getattr(obj, "pytestmark", [])
+-    if not isinstance(mark_list, list):
+-        mark_list = [mark_list]
+-    return normalize_mark_list(mark_list)
++    all_marks = []
++
++    # For classes, traverse the MRO to collect marks from all parent classes
++    if inspect.isclass(obj):
++        for cls in obj.__mro__:
++            # Only check for marks directly defined on this class
++            if "pytestmark" in cls.__dict__:
++                mark_list = cls.__dict__["pytestmark"]
++                if not isinstance(mark_list, list):
++                    mark_list = [mark_list]
++                all_marks.extend(mark_list)
++    else:
++        # For functions and other objects, use the direct attribute
++        mark_list = getattr(obj, "pytestmark", [])
++        if not isinstance(mark_list, list):
++            mark_list = [mark_list]
++        all_marks.extend(mark_list)
++
++    return normalize_mark_list(all_marks)
+ 
+ 
+ def normalize_mark_list(
+diff --git a/testing/test_mark.py b/testing/test_mark.py
+index 65f2581bd..1fb16ac27 100644
+--- a/testing/test_mark.py
++++ b/testing/test_mark.py
+@@ -561,6 +561,45 @@ class TestFunctional:
+         items, rec = pytester.inline_genitems(p)
+         self.assert_markers(items, test_foo=("a", "b", "c"), test_bar=("a", "b", "d"))
+ 
++    def test_mark_decorator_multiple_inheritance(self, pytester: Pytester) -> None:
++        """Test that marks from multiple inheritance are properly collected."""
++        p = pytester.makepyfile(
++            """
++            import pytest
++
++            @pytest.mark.foo
++            class Foo:
++                pass
++
++            @pytest.mark.bar
++            class Bar:
++                pass
++
++            @pytest.mark.baz
++            class Baz:
++                pass
++
++            class TestMultiple(Foo, Bar):
++                def test_multiple(self):
++                    pass
++
++            class TestComplex(Foo, Bar, Baz):
++                def test_complex(self):
++                    pass
++
++            class TestSingle(Foo):
++                def test_single(self):
++                    pass
++        """
++        )
++        items, rec = pytester.inline_genitems(p)
++        self.assert_markers(
++            items,
++            test_multiple=("foo", "bar"),
++            test_complex=("foo", "bar", "baz"),
++            test_single=("foo",),
++        )
++
+     def test_mark_closest(self, pytester: Pytester) -> None:
+         p = pytester.makepyfile(
+             """

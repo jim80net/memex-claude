@@ -1,0 +1,51 @@
+## Summary
+
+I've successfully identified and fixed the bug where `clear_denoms()` produces an unstripped polynomial that behaves inconsistently. Here's what I accomplished:
+
+### Bug Analysis
+The issue was that `clear_denoms()` could return a polynomial with an unstripped DMP representation like `DMP([EX(0)], EX, None)` instead of the proper canonical form `DMP([], EX, None)` for zero polynomials. This caused:
+
+1. `is_zero` to return `False` when it should return `True`  
+2. Methods like `terms_gcd()` to fail with `IndexError`
+3. Inconsistent behavior compared to normally constructed zero polynomials
+
+### Root Cause
+The problem occurred in the `clear_denoms()` method in `/eval/workdir/sympy_sympy/sympy/polys/polyclasses.py`:
+
+1. `dmp_clear_denoms()` multiplies by a common denominator using `dmp_mul_ground()`
+2. When the original polynomial is effectively zero, this creates `[EX(0)]` instead of `[]`
+3. The result was not stripped before creating the new polynomial instance
+
+### Solution Implemented
+
+**File:** `/eval/workdir/sympy_sympy/sympy/polys/polyclasses.py`
+
+1. **Added import:** Added `dmp_strip` to the imports from `densebasic`:
+   ```python
+   dup_strip, dmp_strip,  # Added dmp_strip
+   ```
+
+2. **Fixed clear_denoms method:** Added stripping to ensure canonical representation:
+   ```python
+   def clear_denoms(f):
+       """Clear denominators, but keep the ground domain. """
+       coeff, F = dmp_clear_denoms(f.rep, f.lev, f.dom)
+       F = dmp_strip(F, f.lev)  # Added this line
+       return coeff, f.per(F)
+   ```
+
+**File:** `/eval/workdir/sympy_sympy/sympy/polys/tests/test_polytools.py`
+
+3. **Added test case:** Created `test_Poly_clear_denoms_zero_result()` to verify:
+   - Zero polynomials have correct `is_zero` behavior
+   - Methods like `terms_gcd()` work correctly
+   - Proper canonical representation is maintained
+
+### Impact
+This fix ensures that:
+- `clear_denoms()` always returns properly stripped polynomials
+- Zero polynomials behave consistently regardless of how they're created
+- All polynomial methods work correctly on the result
+- The fix is minimal and only affects the specific edge case
+
+The solution preserves all existing functionality while fixing the inconsistent behavior described in issue #17990.

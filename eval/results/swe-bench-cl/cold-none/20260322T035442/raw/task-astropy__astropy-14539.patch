@@ -1,0 +1,114 @@
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8c..dcd1bb46b0 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1450,12 +1450,50 @@ class TableDataDiff(_BaseDiff):
+             ):
+                 diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+             elif "P" in col.format:
++                # Variable Length Array (VLA) comparison requires special handling
++                def _compare_vla_elements(elem1, elem2, rtol, atol):
++                    """
++                    Compare two VLA elements safely.
++
++                    VLA elements can be arrays with different shapes, dtypes, or
++                    object identities, so we need robust comparison logic.
++                    """
++                    # If same object, they're identical
++                    if elem1 is elem2:
++                        return True
++
++                    # Handle None/empty cases
++                    if elem1 is None and elem2 is None:
++                        return True
++                    if elem1 is None or elem2 is None:
++                        return False
++
++                    # Convert to arrays for comparison
++                    try:
++                        arr1 = np.asarray(elem1)
++                        arr2 = np.asarray(elem2)
++                    except (ValueError, TypeError):
++                        # If conversion fails, fall back to direct comparison
++                        return np.array_equal(elem1, elem2)
++
++                    # Check shapes first
++                    if arr1.shape != arr2.shape:
++                        return False
++
++                    # For floating point data, use allclose with tolerances
++                    if (np.issubdtype(arr1.dtype, np.floating) and
++                        np.issubdtype(arr2.dtype, np.floating)):
++                        return np.allclose(arr1, arr2, rtol=rtol, atol=atol)
++
++                    # For other data types, use array_equal
++                    return np.array_equal(arr1, arr2)
++
+                 diffs = (
+                     [
+                         idx
+                         for idx in range(len(arra))
+-                        if not np.allclose(
+-                            arra[idx], arrb[idx], rtol=self.rtol, atol=self.atol
++                        if not _compare_vla_elements(
++                            arra[idx], arrb[idx], self.rtol, self.atol
+                         )
+                     ],
+                 )
+diff --git a/astropy/io/fits/tests/test_diff.py b/astropy/io/fits/tests/test_diff.py
+index adfebe6a5b..b78b96cf50 100644
+--- a/astropy/io/fits/tests/test_diff.py
++++ b/astropy/io/fits/tests/test_diff.py
+@@ -601,6 +601,52 @@ class TestDiff(FitsTestCase):
+         assert "13 different table data element(s) found (65.00% different)" in report
+         assert report.count("more indices") == 1
+ 
++    def test_identical_vla_table_bug(self):
++        """
++        Regression test for GitHub issue where FITSDiff incorrectly reports
++        differences between identical files containing Variable Length Array (VLA) columns.
++
++        This reproduces the bug reported where:
++        col = fits.Column('a', format='QD', array=[[0], [0, 0]])
++        would fail when comparing a file to itself.
++        """
++        # Create VLA column with different array lengths per row (the QD format)
++        col = Column('a', format='QD', array=[[0], [0, 0]])
++        hdu = BinTableHDU.from_columns([col])
++
++        # Test TableDataDiff directly (this is what FITSDiff uses internally)
++        diff = TableDataDiff(hdu.data, hdu.data)
++        assert diff.identical, "VLA table should be identical to itself"
++        assert diff.diff_total == 0, "No differences should be found"
++
++        # Also test with FITSDiff using HDU objects
++        hdu2 = BinTableHDU.from_columns([Column('a', format='QD', array=[[0], [0, 0]])])
++        diff = FITSDiff(hdu, hdu2)
++        assert diff.identical, "VLA tables with same content should be identical"
++
++        # Test various VLA formats
++        formats_and_data = [
++            ('QD', [[0], [0, 0]]),         # Double precision VLA
++            ('QE', [[1.0], [1.0, 2.0]]),   # Single precision VLA
++            ('QJ', [[1], [1, 2, 3]]),      # Integer VLA
++            ('QB', [[True], [True, False]]), # Boolean VLA
++        ]
++
++        for fmt, data in formats_and_data:
++            with self.subTest(format=fmt):
++                col = Column('test', format=fmt, array=data)
++                hdu = BinTableHDU.from_columns([col])
++
++                # Test self-comparison
++                diff = TableDataDiff(hdu.data, hdu.data)
++                assert diff.identical, f"VLA table with format {fmt} should be identical to itself"
++
++                # Test separate but equivalent tables
++                col2 = Column('test', format=fmt, array=data)
++                hdu2 = BinTableHDU.from_columns([col2])
++                diff = TableDataDiff(hdu.data, hdu2.data)
++                assert diff.identical, f"VLA tables with format {fmt} and same content should be identical"
++
+     def test_identical_files_basic(self):
+         """Test identicality of two simple, extensionless files."""
+ 

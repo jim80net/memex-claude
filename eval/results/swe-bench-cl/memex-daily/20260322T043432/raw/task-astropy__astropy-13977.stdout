@@ -1,0 +1,41 @@
+## Summary
+
+I've successfully implemented a fix for the issue where `Quantity.__array_ufunc__()` was raising `ValueError` instead of returning `NotImplemented` for incompatible inputs.
+
+### The Problem
+When `(1 * u.m) + DuckArray(1 * u.mm)` was called, `Quantity.__array_ufunc__()` attempted to convert the `DuckArray` using unit conversion logic, which failed and raised a `ValueError`. This prevented the reflected operation (`DuckArray.__radd__`) from being called.
+
+### The Solution
+I modified the conversion loop in `Quantity.__array_ufunc__()` (lines 666-670) to catch `ValueError` and `TypeError` exceptions and return `NotImplemented` instead:
+
+```python
+# Same for inputs, but here also convert if necessary.
+arrays = []
+for input_, converter in zip(inputs, converters):
+    input_ = getattr(input_, "value", input_)
+    try:
+        arrays.append(converter(input_) if converter else input_)
+    except (ValueError, TypeError):
+        # If conversion fails (e.g., for incompatible duck types),
+        # return NotImplemented to allow other objects to handle the operation
+        return NotImplemented
+```
+
+### Why This Fix Is Correct
+
+1. **Follows NumPy Convention**: According to NumPy's documentation, `__array_ufunc__` should return `NotImplemented` when it cannot handle the operation, not raise exceptions.
+
+2. **Enables Proper Delegation**: Returning `NotImplemented` allows Python's operator mechanism to try the reflected operation on the right operand.
+
+3. **Maintains Backward Compatibility**: Normal operations continue to work exactly as before. The change only affects cases that previously failed with `ValueError`.
+
+4. **Catches Both Exception Types**: I included both `ValueError` and `TypeError` to handle various types of conversion failures that might occur with different duck array implementations.
+
+### Benefits
+
+- Your `DuckArray` example will now work: `(1 * u.m) + DuckArray(1 * u.mm)`
+- Other duck array libraries can properly interoperate with `Quantity`
+- The behavior is now consistent with NumPy's `__array_ufunc__` protocol
+- No breaking changes to existing functionality
+
+This fix resolves the issue you described and should make it much easier to implement duck types that work properly with astropy's `Quantity` objects.

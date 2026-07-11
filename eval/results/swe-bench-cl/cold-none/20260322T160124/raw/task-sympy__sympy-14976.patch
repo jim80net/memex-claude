@@ -1,0 +1,92 @@
+diff --git a/sympy/printing/pycode.py b/sympy/printing/pycode.py
+index d06901425d..8d62baed94 100644
+--- a/sympy/printing/pycode.py
++++ b/sympy/printing/pycode.py
+@@ -331,6 +331,29 @@ def _print_Float(self, e):
+         args = str(tuple(map(int, e._mpf_)))
+         return '{func}({args})'.format(func=self._module_format('mpmath.mpf'), args=args)
+ 
++    def _print_Rational(self, e):
++        # Handle rational numbers to maintain precision in mpmath
++        # Convert both numerator and denominator to mpmath.mpf using string representation
++        # to avoid precision loss that would occur with regular Python division
++        if e.q == 1:
++            # For integers, just return the mpf representation
++            return '{func}({p})'.format(
++                func=self._module_format('mpmath.mpf'),
++                p=repr(str(e.p))
++            )
++        else:
++            # For rationals, use mpmath.mpf for both numerator and denominator
++            return '({numer}/{denom})'.format(
++                numer='{func}({p})'.format(
++                    func=self._module_format('mpmath.mpf'),
++                    p=repr(str(e.p))
++                ),
++                denom='{func}({q})'.format(
++                    func=self._module_format('mpmath.mpf'),
++                    q=repr(str(e.q))
++                )
++            )
++
+ 
+     def _print_uppergamma(self, e):
+         return "{0}({1}, {2}, {3})".format(
+diff --git a/sympy/utilities/tests/test_lambdify.py b/sympy/utilities/tests/test_lambdify.py
+index 149a7e3136..a6ff7127ca 100644
+--- a/sympy/utilities/tests/test_lambdify.py
++++ b/sympy/utilities/tests/test_lambdify.py
+@@ -157,6 +157,53 @@ def test_mpmath_precision():
+     mpmath.mp.dps = 100
+     assert str(lambdify((), pi.evalf(100), 'mpmath')()) == str(pi.evalf(100))
+ 
++@conserve_mpmath_dps
++def test_mpmath_rational_precision():
++    """
++    Test that rational numbers are properly wrapped for mpmath to maintain precision.
++
++    Previously, expressions like 77 + S(1)/3 would generate code like:
++    return RisingFactorial(18, x) - 232/3
++
++    where 232/3 was plain Python division, causing precision loss.
++    Now it should generate:
++    return RisingFactorial(18, x) - (mpmath.mpf('232')/mpmath.mpf('3'))
++    """
++    from sympy.functions.combinatorial.factorials import RisingFactorial
++
++    mpmath.mp.dps = 50
++    x = symbols('x')
++
++    # Test simple rational
++    expr = Rational(232, 3)
++    f = lambdify((), expr, 'mpmath')
++
++    # The result should be exact
++    expected = mpmath.mpf('232') / mpmath.mpf('3')
++    result = f()
++    assert abs(result - expected) < mpmath.mpf('1e-48')
++
++    # Test the original issue: expression with rational
++    expr2 = RisingFactorial(18, x) - (77 + Rational(1, 3))
++    f2 = lambdify(x, expr2, 'mpmath')
++
++    # Check that the generated code uses mpmath.mpf for the rational
++    import inspect
++    source = inspect.getsource(f2)
++    # The rational 232/3 should be wrapped with mpmath.mpf
++    assert 'mpmath.mpf' in source
++
++    # Test precision: the result should have high precision
++    test_x = mpmath.mpf('1.5')
++    result2 = f2(test_x)
++
++    # Calculate expected result with high precision
++    from sympy.functions.combinatorial.factorials import rf
++    expected2 = rf(18, test_x) - (mpmath.mpf('77') + mpmath.mpf('1')/mpmath.mpf('3'))
++
++    # The results should agree to high precision
++    assert abs(result2 - expected2) < mpmath.mpf('1e-48')
++
+ #================== Test Translations ==============================
+ # We can only check if all translated functions are valid. It has to be checked
+ # by hand if they are complete.

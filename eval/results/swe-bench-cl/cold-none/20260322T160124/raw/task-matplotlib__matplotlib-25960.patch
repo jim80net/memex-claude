@@ -1,0 +1,22 @@
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index dab2bc4a5a..640630b706 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -2273,13 +2273,10 @@ class SubFigure(FigureBase):
+             self.bbox_relative.p1 = bbox.p1
+             return
+         # need to figure out *where* this subplotspec is.
+-        gs = self._subplotspec.get_gridspec()
+-        wr = np.asarray(gs.get_width_ratios())
+-        hr = np.asarray(gs.get_height_ratios())
+-        dx = wr[self._subplotspec.colspan].sum() / wr.sum()
+-        dy = hr[self._subplotspec.rowspan].sum() / hr.sum()
+-        x0 = wr[:self._subplotspec.colspan.start].sum() / wr.sum()
+-        y0 = 1 - hr[:self._subplotspec.rowspan.stop].sum() / hr.sum()
++        # Use the subplotspec's get_position method to properly handle spacing
++        position_bbox = self._subplotspec.get_position(self._parent.figure)
++        x0, y0 = position_bbox.x0, position_bbox.y0
++        dx, dy = position_bbox.width, position_bbox.height
+         if self.bbox_relative is None:
+             self.bbox_relative = Bbox.from_bounds(x0, y0, dx, dy)
+         else:

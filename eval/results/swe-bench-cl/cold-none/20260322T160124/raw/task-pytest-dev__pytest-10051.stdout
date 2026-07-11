@@ -1,0 +1,42 @@
+## Summary
+
+I've successfully identified and fixed the `caplog.get_records` and `caplog.clear` conflict issue in pytest. Here's what I did:
+
+### The Problem
+The issue was in the `LogCaptureHandler.reset()` method at **line 345** in `src/_pytest/logging.py`. The problem occurred because:
+
+1. During test setup, `caplog.get_records("call")` returns `item.stash[caplog_records_key]["call"]` which is set to reference the same list object as `handler.records`
+2. When `caplog.clear()` was called, it would call `handler.reset()` 
+3. The buggy `reset()` method did `self.records = []` (assignment), creating a **new empty list**
+4. This left the stash still pointing to the **old list**, while `handler.records` pointed to the **new list**
+5. Result: `caplog.get_records()` would return the old list (with records) while `caplog.records` would be empty
+
+### The Fix
+I changed **line 345** in `src/_pytest/logging.py` from:
+```python
+self.records = []
+```
+to:
+```python
+self.records.clear()
+```
+
+### Why This Fixes It
+- `list.clear()` modifies the existing list object in-place, removing all elements
+- All references to the list (including the one in the stash) see the same cleared list
+- This maintains the connection between `get_records()` and `records`
+
+### Testing
+I added a comprehensive test `test_get_records_clear_conflict()` in `testing/logging/test_fixture.py` that:
+1. Verifies initial consistency between `get_records()` and `records`
+2. Adds a log record and verifies consistency is maintained
+3. Calls `caplog.clear()` and verifies they're still consistent (this would fail with the old code)
+4. Adds another record and verifies consistency is maintained
+
+### Verification
+I created several test scripts that demonstrated:
+- The old behavior correctly reproduced the bug
+- The new behavior maintains consistency
+- The user's exact example now passes
+
+The fix is minimal, safe, and maintains backward compatibility while resolving the reported issue.

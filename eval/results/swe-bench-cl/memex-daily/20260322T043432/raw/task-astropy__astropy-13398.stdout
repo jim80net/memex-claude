@@ -1,0 +1,49 @@
+Based on my analysis of the astropy coordinate transformation codebase and your proposed approach, I think this is a valuable and well-reasoned contribution. Here's my assessment:
+
+## Technical Merit
+
+**Strong Foundation**: Your proposal addresses a real architectural mismatch. The current ITRS→AltAz path goes through celestial coordinate systems (ICRS/CIRS) that apply aberration and light-time corrections designed for distant astronomical objects. For satellites and terrestrial targets, this is both inappropriate and confusing.
+
+**Clean Approach**: The direct geometric transformation using rotation matrices is mathematically sound:
+- Observer location-based rotations are exactly what's needed for local topocentric coordinates
+- Treating ITRS positions as time-invariant makes perfect sense for nearby objects
+- The matrix approach matches the existing astropy transformation patterns
+
+## Implementation Analysis
+
+Looking at your code, the key insights are solid:
+
+1. **Time Invariance**: Avoiding ITRS→ITRS transforms prevents the problematic SSB referencing that displaces terrestrial objects by millions of kilometers.
+
+2. **Direct Geometry**: The rotation matrices correctly implement:
+   - AltAz: longitude rotation, then latitude rotation with left-handed correction
+   - HADec: longitude rotation with left-handed correction
+
+3. **Consistent Integration**: Using `FunctionTransformWithFiniteDifference` and the existing transformation graph infrastructure ensures proper integration.
+
+## Current Transform Chain Issue
+
+From examining `icrs_observed_transforms.py`, the current path involves:
+- Complex ERFA astrometry context setup (`erfa_astrom.get().apco()`)
+- Parallax corrections for observer position
+- CIRS intermediate transformations
+- Aberration corrections via `atciqz`/`aticq`
+
+This is excellent for stars but overkill and inaccurate for satellites.
+
+## Recommendation
+
+**This should be implemented.** Your approach would:
+
+1. **Fix User Pain**: Eliminates the recurring confusion about satellite observation accuracy
+2. **Improve Performance**: Direct geometric transforms are faster than the multi-step celestial path
+3. **Maintain Compatibility**: Doesn't break existing astronomical transformations
+4. **Follow Best Practices**: Uses astropy's established patterns and infrastructure
+
+## Suggested Enhancements
+
+1. **Documentation**: Consider adding clear documentation about when to use ITRS-direct vs celestial transforms
+2. **Tests**: The existing `test_straight_overhead()` test should pass with your approach and could be expanded
+3. **Validation**: Cross-validation with existing transforms for edge cases might be valuable
+
+Your approach elegantly solves a fundamental conceptual mismatch in the current system. I'd encourage you to submit this as a pull request.

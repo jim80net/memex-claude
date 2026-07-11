@@ -1,0 +1,52 @@
+## Summary
+
+I have successfully identified and fixed the Sphinx bug where instance variables incorrectly link to global variables with the same name. Here's what I accomplished:
+
+### 🔍 **Root Cause Analysis**
+The issue was in the `find_obj` method in `sphinx/domains/python.py` (lines 1158-1162). When Sphinx couldn't find an exact match for a cross-reference, it fell back to "fuzzy" searching using:
+
+```python
+searchname = '.' + name
+matches = [(oname, self.objects[oname]) for oname in self.objects
+           if oname.endswith(searchname) and
+           self.objects[oname].objtype in objtypes]
+```
+
+This would match **any** object ending with the variable name, regardless of scope, causing instance variables to incorrectly link to unrelated global variables.
+
+### 🛠️ **The Fix**
+I implemented scope-aware cross-reference resolution that prioritizes matches by scope proximity:
+
+1. **Class scope**: `module.ClassName.variablename` (highest priority)
+2. **Module scope**: `module.variablename` (medium priority) 
+3. **Global scope**: `variablename` (lowest priority, only for top-level names)
+
+The new logic prevents cross-module pollution where variables from completely unrelated modules would be matched.
+
+### 📝 **Key Changes**
+
+**File**: `sphinx/domains/python.py` (lines ~1158-1182)
+
+- Replaced simple `endswith()` matching with scope-aware logic
+- Added three tiers of matching with proper prioritization
+- Prevented unrelated cross-module matches
+- Maintained backward compatibility for valid fuzzy search cases
+
+**File**: `tests/test_domain_py.py` 
+
+- Added comprehensive test case `test_variable_linking_issue()` 
+- Tests verify scope prioritization and prevent regression
+
+### ✅ **Verification**
+- Created and ran comprehensive tests confirming the fix works
+- Verified that existing functionality remains intact (no regressions)
+- The fix correctly handles the original reproduction case scenario
+
+### 🎯 **Impact**
+This fix resolves the reported issue where:
+- `somepackage.subA::Foo.somename` would incorrectly link to `somepackage.subB::Bar.somename`
+- `somepackage::Foo.somename` would incorrectly link to `somepackage.somename`
+
+Now, instance variables only link within their proper scope context, eliminating false cross-references that confused users and made documentation less reliable.
+
+The fix maintains all existing valid functionality while preventing the problematic cross-scope linking that was the core of this bug report.
