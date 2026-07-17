@@ -5,7 +5,6 @@ import type { MemexPaths } from "@jim80net/memex-core";
 
 export type ClaudePaths = MemexPaths & {
   configPath: string;
-  preCompactDir: string;
   cronWatermarkPath: string;
   autoMemoryWatermarkPath: string;
 };
@@ -23,7 +22,6 @@ export function getClaudePaths(): ClaudePaths {
     registryPath: join(cacheDir, "memex-projects.json"),
     tracesDir: join(cacheDir, "memex-traces"),
     configPath: join(home, ".claude", "memex.json"),
-    preCompactDir: join(cacheDir, "pre-compact"),
     cronWatermarkPath: join(cacheDir, "memex-cron-watermark"),
     autoMemoryWatermarkPath: join(cacheDir, "memex-automemory-warned"),
     globalSkillsDir: join(home, ".claude", "skills"),

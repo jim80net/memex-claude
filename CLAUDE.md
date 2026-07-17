@@ -22,8 +22,8 @@ bun run build.ts     # compile standalone binary
   - `projection.ts` — G3 thin adapter: `resolveOriginRoot` / `planProjection` / `applyProjection` into `~/.claude/rules`
   - `scan-roots.ts` — ScanDirs assembly + portable handle registry (skips raw origin/rules when projecting)
   - `session.ts` — File-based session persistence (wraps core's `SessionTracker` interface)
-- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, pre-compact, session-start
-- `src/main.ts` — Entry point: SessionStart pull+project early; other events build `SkillIndex` and dispatch
+- `src/hooks/` — Hook handlers: user-prompt, pre-tool-use, stop, session-start
+- `src/main.ts` — Entry point: SessionStart pulls/projects early; other registered events build `SkillIndex` and dispatch by `hook_event_name`
 - `bin/` — Wrapper scripts (memex, memex.cmd, install.sh, sleep-schedule.sh)
 - `build.ts` — Build script: compiles standalone binary via bun, stubs sharp, bundles ONNX
 - `skills/` — Bundled skill definitions (sleep, deep-sleep, doctor, handoff, takeover, memory-creation)
@@ -99,4 +99,4 @@ Native Claude Code rules support `paths:`. The router adds: `hooks:`, `keywords:
 - Tests mock `@jim80net/memex-core` functions (telemetry, sync, etc.) to avoid filesystem side effects
 - All Claude-specific paths are centralized in `src/core/paths.ts`
 - File writes to shared state (telemetry, session, registry) use advisory file locks from `@jim80net/memex-core`
-- All 5 hook events are registered in `hooks/hooks.json`; per-hook `enabled` config controls activation
+- Only hooks whose handler does real work are registered in `hooks/hooks.json` (SessionStart, UserPromptSubmit, PreToolUse, Stop); per-hook `enabled` config controls activation. Default-`false` is not itself a reason to omit registration: PreToolUse and Stop must remain registered so enabling them in config works. A dead or unconditional no-op handler must NOT be registered, because it pays the binary cold-start on every event for no behavior (PreCompact's unused breadcrumb handler raced its 10s timeout during `/compact`). Every registered event MUST have an explicit dispatch path in `src/main.ts`; `test/hooks-registration.test.ts` enforces this invariant.
