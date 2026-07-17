@@ -25,7 +25,6 @@ function fakePaths(root: string): ClaudePaths {
     registryPath: join(cacheDir, "memex-projects.json"),
     tracesDir: join(cacheDir, "memex-traces"),
     configPath: join(root, ".claude", "memex.json"),
-    preCompactDir: join(cacheDir, "pre-compact"),
     cronWatermarkPath: join(cacheDir, "memex-cron-watermark"),
     autoMemoryWatermarkPath: join(cacheDir, "memex-automemory-warned"),
     globalSkillsDir: join(root, ".claude", "skills"),

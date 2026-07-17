@@ -11,17 +11,23 @@ const hooksJson = JSON.parse(
 const mainSource = readFileSync(join(repoRoot, "src", "main.ts"), "utf-8");
 
 /**
- * Extract the hook-event names handled by an explicit `case "Event":` in the
- * main.ts dispatch switch. This is intentionally a source-text scan rather than
- * an import: it asserts the *static registration* (hooks.json) lines up with the
- * *static dispatch* (main.ts) without spawning the heavyweight binary.
+ * Extract hook-event names handled either by an explicit `case "Event":` or by
+ * an early `if (event === "Event")` dispatch. SessionStart intentionally takes
+ * the early path so pull/projection runs without constructing the skill index.
+ * This is a source-text scan rather than an import: it asserts static
+ * registration lines up with static dispatch without spawning the binary.
  */
 function dispatchedEvents(): Set<string> {
   const events = new Set<string>();
-  const re = /case\s+"([A-Za-z]+)"\s*:/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(mainSource)) !== null) {
-    events.add(m[1]);
+  const patterns = [
+    /case\s+"([A-Za-z]+)"\s*:/g,
+    /if\s*\(\s*event\s*===\s*"([A-Za-z]+)"\s*\)/g,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(mainSource)) !== null) {
+      events.add(match[1]);
+    }
   }
   return events;
 }
@@ -37,7 +43,7 @@ describe("hooks.json registration ↔ main.ts dispatch (issue #50)", () => {
     for (const event of registered) {
       expect(
         dispatched.has(event),
-        `hooks.json registers "${event}" but main.ts has no \`case "${event}":\` — ` +
+        `hooks.json registers "${event}" but main.ts has no explicit dispatch — ` +
           `a registered-but-undispatched hook pays a binary cold-start to no-op`,
       ).toBe(true);
     }
