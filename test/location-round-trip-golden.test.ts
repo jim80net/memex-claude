@@ -26,7 +26,7 @@ const FIXTURE_CTX: ScanRootContext = {
 };
 
 function fixtureRegistry() {
-  return buildScanRoots(FIXTURE_CTX, {
+  const registry = buildScanRoots(FIXTURE_CTX, {
     skillDirs: [
       resolve("/home/user/.grok/skills"),
       resolve("/home/user/project/.grok/skills"),
@@ -39,6 +39,21 @@ function fixtureRegistry() {
       resolve("/home/user/.memex/sync/rules"),
     ],
   });
+
+  // Unclassified roots are host-local: core hashes their native absolute path,
+  // so /opt/... and D:\\opt\\... intentionally produce different fallback keys.
+  // This cross-adapter golden fixes one logical key; bind that byte-stable key
+  // to the native fixture root while keeping native decode behavior.
+  const unclassifiedGolden = LOCATION_ROUND_TRIP_GOLDEN.find(({ handle }) =>
+    handle.startsWith("memex://skill-unclassified-"),
+  )!;
+  const canonicalKey = unclassifiedGolden.handle
+    .slice("memex://".length)
+    .split("/", 1)[0]!;
+  const nativeUnclassifiedRoot = resolve("/opt/extra/skills");
+  return registry.map((root) =>
+    root.rootPath === nativeUnclassifiedRoot ? { ...root, key: canonicalKey } : root,
+  );
 }
 
 describe("location round-trip golden (memex-core#32 conformance)", () => {
