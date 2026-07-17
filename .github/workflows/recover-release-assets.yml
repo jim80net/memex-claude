@@ -1,0 +1,220 @@
+name: Recover Existing Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable semver tag whose release assets need recovery
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-recovery-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      main_sha: ${{ steps.verify.outputs.main_sha }}
+      tag_sha: ${{ steps.verify.outputs.tag_sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Verify immutable tag, release, and empty target slots
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+
+          git rev-parse --verify "refs/tags/$TAG^{commit}" >/dev/null
+          main_sha="$(git rev-parse HEAD)"
+          tag_sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+          existing="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          expected=(
+            memex-linux-x64.tar.gz
+            memex-linux-arm64.tar.gz
+            memex-darwin-arm64.tar.gz
+            memex-win32-x64.zip
+            checksums.txt
+          )
+          for asset in "${expected[@]}"; do
+            if grep -Fqx "$asset" <<<"$existing"; then
+              echo "refusing to overwrite existing release asset: $asset" >&2
+              exit 1
+            fi
+          done
+
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+          echo "Testing main $main_sha; building immutable tag $TAG at $tag_sha"
+
+  test-main:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node-version: 20
+          - os: ubuntu-latest
+            node-version: 22
+          - os: windows-latest
+            node-version: 22
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.main_sha }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm tsc --noEmit
+
+      - name: Run tests
+        run: pnpm test
+
+  build:
+    needs: [preflight, test-main]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            bun-target: bun-linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+            bun-target: bun-linux-arm64
+          - os: macos-latest
+            platform: darwin-arm64
+            bun-target: bun-darwin-arm64
+          - os: windows-latest
+            platform: win32-x64
+            bun-target: bun-windows-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify checkout is the immutable tag commit
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.preflight.outputs.tag_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXPECTED_SHA" || {
+            echo "tag checkout drift: expected $EXPECTED_SHA, got $actual_sha" >&2
+            exit 1
+          }
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build binary
+        run: bun run build.ts --target ${{ matrix.bun-target }}
+
+      - name: Package Unix artifact
+        if: runner.os != 'Windows'
+        run: tar -czf memex-${{ matrix.platform }}.tar.gz -C dist/${{ matrix.platform }} .
+
+      - name: Package Windows artifact
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/${{ matrix.platform }}/* -DestinationPath memex-${{ matrix.platform }}.zip
+
+      - name: Stage release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: memex-${{ matrix.platform }}.*
+
+  publish:
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download recovered artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Validate artifact set and generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            memex-linux-x64.tar.gz
+            memex-linux-arm64.tar.gz
+            memex-darwin-arm64.tar.gz
+            memex-win32-x64.zip
+          )
+          for asset in "${expected[@]}"; do
+            test -f "artifacts/$asset" || {
+              echo "missing recovered artifact: $asset" >&2
+              exit 1
+            }
+          done
+          test "$(find artifacts -maxdepth 1 -type f | wc -l)" -eq 4
+          (cd artifacts && sha256sum memex-* > checksums.txt)
+
+      - name: Recheck collisions and upload without clobber
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          existing="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for path in artifacts/*; do
+            asset="$(basename "$path")"
+            if grep -Fqx "$asset" <<<"$existing"; then
+              echo "refusing to overwrite existing release asset: $asset" >&2
+              exit 1
+            fi
+          done
+
+          # gh release upload fails on any collision because --clobber is absent.
+          gh release upload "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY"
