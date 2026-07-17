@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { resolve } from "node:path";
 import { handleUserPrompt } from "../src/hooks/user-prompt.ts";
 import type { SkillIndex, HookInput, SkillSearchResult } from "@jim80net/memex-core";
 import type { HookConfig, AutoMemoryMode } from "../src/core/config.ts";
@@ -385,10 +386,10 @@ describe("handleUserPrompt", () => {
   });
 
   it("skill teaser resolves memex:// handle to absolute path for display", async () => {
-    const absolute = "/home/user/.claude/skills/weather/SKILL.md";
+    const absolute = resolve("/home/user/.claude/skills/weather/SKILL.md");
     const handle = "memex://claude-global/weather/SKILL.md";
     const registry = [
-      { key: "claude-global", rootPath: "/home/user/.claude/skills" },
+      { key: "claude-global", rootPath: resolve("/home/user/.claude/skills") },
     ];
 
     const match: SkillSearchResult = {

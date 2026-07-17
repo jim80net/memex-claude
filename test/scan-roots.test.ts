@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   encodePortableLocation,
@@ -7,9 +7,9 @@ import {
 import { buildClaudeScanRoots } from "../src/core/scan-roots.ts";
 
 describe("buildClaudeScanRoots", () => {
-  const cwd = "/home/user/project";
-  const claudeHome = "/home/user/.claude";
-  const syncRepoDir = "/home/user/.local/share/memex-claude";
+  const cwd = resolve("/home/user/project");
+  const claudeHome = resolve("/home/user/.claude");
+  const syncRepoDir = resolve("/home/user/.local/share/memex-claude");
 
   it("labels claude-global, claude-project, and sync-skills roots", () => {
     const paths = {
