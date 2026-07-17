@@ -2,6 +2,7 @@
 // Golden bytes vendored from memex-core test/fixtures at freeze tag memex-core-v0.5.0.
 
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import {
   buildScanRoots,
   decodePortableLocation,
@@ -11,35 +12,57 @@ import {
 import { LOCATION_ROUND_TRIP_GOLDEN } from "./fixtures/cross-adapter/location-round-trip-golden.ts";
 
 const FIXTURE_CTX: ScanRootContext = {
-  cwd: "/home/user/project",
+  cwd: resolve("/home/user/project"),
   syncEnabled: true,
-  syncRepoDir: "/home/user/.memex/sync",
-  globalSkillsDirs: ["/home/user/.grok/skills", "/home/user/.claude/skills"],
-  globalRulesDirs: ["/home/user/.grok/rules"],
-  projectSkillsDir: "/home/user/project/.grok/skills",
-  projectRulesDir: "/home/user/project/.grok/rules",
+  syncRepoDir: resolve("/home/user/.memex/sync"),
+  globalSkillsDirs: [
+    resolve("/home/user/.grok/skills"),
+    resolve("/home/user/.claude/skills"),
+  ],
+  globalRulesDirs: [resolve("/home/user/.grok/rules")],
+  projectSkillsDir: resolve("/home/user/project/.grok/skills"),
+  projectRulesDir: resolve("/home/user/project/.grok/rules"),
   harness: "grok",
 };
 
 function fixtureRegistry() {
-  return buildScanRoots(FIXTURE_CTX, {
+  const registry = buildScanRoots(FIXTURE_CTX, {
     skillDirs: [
-      "/home/user/.grok/skills",
-      "/home/user/project/.grok/skills",
-      "/home/user/.memex/sync/skills",
-      "/opt/extra/skills",
+      resolve("/home/user/.grok/skills"),
+      resolve("/home/user/project/.grok/skills"),
+      resolve("/home/user/.memex/sync/skills"),
+      resolve("/opt/extra/skills"),
     ],
-    memoryDirs: ["/home/user/project/.grok/memories"],
-    ruleDirs: ["/home/user/.grok/rules", "/home/user/.memex/sync/rules"],
+    memoryDirs: [resolve("/home/user/project/.grok/memories")],
+    ruleDirs: [
+      resolve("/home/user/.grok/rules"),
+      resolve("/home/user/.memex/sync/rules"),
+    ],
   });
+
+  // Unclassified roots are host-local: core hashes their native absolute path,
+  // so /opt/... and D:\\opt\\... intentionally produce different fallback keys.
+  // This cross-adapter golden fixes one logical key; bind that byte-stable key
+  // to the native fixture root while keeping native decode behavior.
+  const unclassifiedGolden = LOCATION_ROUND_TRIP_GOLDEN.find(({ handle }) =>
+    handle.startsWith("memex://skill-unclassified-"),
+  )!;
+  const canonicalKey = unclassifiedGolden.handle
+    .slice("memex://".length)
+    .split("/", 1)[0]!;
+  const nativeUnclassifiedRoot = resolve("/opt/extra/skills");
+  return registry.map((root) =>
+    root.rootPath === nativeUnclassifiedRoot ? { ...root, key: canonicalKey } : root,
+  );
 }
 
 describe("location round-trip golden (memex-core#32 conformance)", () => {
   it("round-trips golden vectors against pinned memex-core", () => {
     const registry = fixtureRegistry();
     for (const { absolute, handle } of LOCATION_ROUND_TRIP_GOLDEN) {
-      expect(encodePortableLocation(registry, absolute)).toBe(handle);
-      expect(decodePortableLocation(registry, handle)).toBe(absolute);
+      const nativeAbsolute = resolve(absolute);
+      expect(encodePortableLocation(registry, nativeAbsolute)).toBe(handle);
+      expect(decodePortableLocation(registry, handle)).toBe(nativeAbsolute);
     }
   });
 });
