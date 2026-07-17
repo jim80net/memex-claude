@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/jim80net/memex-claude/compare/v1.8.0...v1.9.0) (2026-07-17)
+
+
+### Features
+
+* Phase 2 portable-location wiring for claude adapter (memex-core[#32](https://github.com/jim80net/memex-claude/issues/32)) ([#52](https://github.com/jim80net/memex-claude/issues/52)) ([7b5bf26](https://github.com/jim80net/memex-claude/commit/7b5bf2634e67544e368bddf3457cb5db5709423c))
+* **projection:** G3 shared-origin rules via memex-core@0.6.0 ([#55](https://github.com/jim80net/memex-claude/issues/55)) ([44b29a0](https://github.com/jim80net/memex-claude/commit/44b29a0e26895db095b6d4df1a20a662117e8860))
+
+
+### Bug Fixes
+
+* remove unconditional PreCompact registration racing timeout ([#56](https://github.com/jim80net/memex-claude/issues/56)) ([407a94b](https://github.com/jim80net/memex-claude/commit/407a94b32011833028b939dc488184caed39644d))
+
 ## [1.8.0](https://github.com/jim80net/memex-claude/compare/v1.7.0...v1.8.0) (2026-04-09)
 
 
