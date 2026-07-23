@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 
 const CROSS_ADAPTER_TRANSFORMERS_RANGE = "^3.8.1";
 const CROSS_ADAPTER_TRANSFORMERS_RESOLVED = "3.8.1";
-const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.1";
-const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.1";
+const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.2";
+const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.2";
 const APPLICATION_SHARP_OVERRIDE = "0.35.3";
+const APPLICATION_PROTOBUFJS_OVERRIDE = "7.6.5";
+const APPLICATION_TAR_OVERRIDE = "7.5.21";
 
 function readJson(relFromRepoRoot: string): Record<string, unknown> {
   const url = new URL(`../${relFromRepoRoot}`, import.meta.url);
@@ -48,10 +50,16 @@ describe("cross-adapter version-pin alignment (memex-core#32)", () => {
   });
 
   it("the application owns one patched sharp runtime", () => {
+    const npmOverrides = claudePkg.overrides as Record<string, string> | undefined;
     const pnpm = claudePkg.pnpm as
       | { overrides?: Record<string, string> }
       | undefined;
+    expect(npmOverrides?.sharp).toBe(APPLICATION_SHARP_OVERRIDE);
+    expect(npmOverrides?.protobufjs).toBe(APPLICATION_PROTOBUFJS_OVERRIDE);
+    expect(npmOverrides?.tar).toBe(APPLICATION_TAR_OVERRIDE);
     expect(pnpm?.overrides?.sharp).toBe(APPLICATION_SHARP_OVERRIDE);
+    expect(pnpm?.overrides?.protobufjs).toBe(APPLICATION_PROTOBUFJS_OVERRIDE);
+    expect(pnpm?.overrides?.tar).toBe(APPLICATION_TAR_OVERRIDE);
 
     const storeDir = fileURLToPath(new URL("../node_modules/.pnpm", import.meta.url));
     const sharpEntries = readdirSync(storeDir)

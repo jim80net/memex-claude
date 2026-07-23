@@ -13,21 +13,6 @@ import { handleSessionStart } from "./hooks/session-start.ts";
 
 declare const MEMEX_BUNDLED_SHARP_VERSION: string;
 
-// Cross-release bridge while the Core resolver API is independently gated.
-// Remove this local constructor shape once the published Core declaration
-// includes LocalEmbeddingRuntimeResolver.
-type RuntimeAwareLocalEmbeddingProvider = new (
-  model?: string,
-  cacheDir?: string,
-  runtimeResolver?: {
-    resolveSharpVersion(): string;
-    loadTransformers(): Promise<unknown>;
-  },
-) => LocalEmbeddingProvider;
-
-const RuntimeAwareLocalEmbeddingProvider =
-  LocalEmbeddingProvider as unknown as RuntimeAwareLocalEmbeddingProvider;
-
 const bundledEmbeddingRuntime =
   typeof MEMEX_BUNDLED_SHARP_VERSION === "string"
     ? {
@@ -94,7 +79,7 @@ async function main(): Promise<void> {
   }
 
   // Construct core objects
-  const provider = new RuntimeAwareLocalEmbeddingProvider(
+  const provider = new LocalEmbeddingProvider(
     config.embeddingModel,
     paths.modelsDir,
     bundledEmbeddingRuntime,
