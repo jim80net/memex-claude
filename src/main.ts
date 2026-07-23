@@ -11,6 +11,31 @@ import { handleStop } from "./hooks/stop.ts";
 import { handlePreToolUse } from "./hooks/pre-tool-use.ts";
 import { handleSessionStart } from "./hooks/session-start.ts";
 
+declare const MEMEX_BUNDLED_SHARP_VERSION: string;
+
+// Cross-release bridge while the Core resolver API is independently gated.
+// Remove this local constructor shape once the published Core declaration
+// includes LocalEmbeddingRuntimeResolver.
+type RuntimeAwareLocalEmbeddingProvider = new (
+  model?: string,
+  cacheDir?: string,
+  runtimeResolver?: {
+    resolveSharpVersion(): string;
+    loadTransformers(): Promise<unknown>;
+  },
+) => LocalEmbeddingProvider;
+
+const RuntimeAwareLocalEmbeddingProvider =
+  LocalEmbeddingProvider as unknown as RuntimeAwareLocalEmbeddingProvider;
+
+const bundledEmbeddingRuntime =
+  typeof MEMEX_BUNDLED_SHARP_VERSION === "string"
+    ? {
+        resolveSharpVersion: () => MEMEX_BUNDLED_SHARP_VERSION,
+        loadTransformers: () => import("@huggingface/transformers"),
+      }
+    : undefined;
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -69,7 +94,11 @@ async function main(): Promise<void> {
   }
 
   // Construct core objects
-  const provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
+  const provider = new RuntimeAwareLocalEmbeddingProvider(
+    config.embeddingModel,
+    paths.modelsDir,
+    bundledEmbeddingRuntime,
+  );
   const cachePath = join(paths.cacheDir, "memex-cache.json");
 
   const scanDirs = await assembleClaudeScanDirs(

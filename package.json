@@ -11,6 +11,7 @@
   "scripts": {
     "build": "bun run build.ts",
     "test": "vitest run",
+    "test:packaged-runtime": "pnpm build && bun run test/packaged-runtime-smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
