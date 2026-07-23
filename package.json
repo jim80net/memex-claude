@@ -11,6 +11,7 @@
   "scripts": {
     "build": "bun run build.ts",
     "test": "vitest run",
+    "test:packaged-runtime": "pnpm build && bun run test/packaged-runtime-smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -21,12 +22,19 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
-    "@jim80net/memex-core": "^0.7.0"
+    "@jim80net/memex-core": "^0.7.2"
+  },
+  "overrides": {
+    "protobufjs": "7.6.5",
+    "sharp": "0.35.3",
+    "tar": "7.5.21"
   },
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
     "overrides": {
-      "sharp": "link:./stubs/sharp"
+      "protobufjs": "7.6.5",
+      "sharp": "0.35.3",
+      "tar": "7.5.21"
     }
   }
 }

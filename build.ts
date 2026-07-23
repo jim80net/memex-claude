@@ -3,18 +3,29 @@
  * Build script for memex-claude standalone binaries.
  *
  * Compiles the TypeScript source into a self-contained executable using
- * `bun build --compile`. Sharp is stubbed out (we only use text embeddings).
- * The ONNX runtime shared library is copied alongside the binary.
+ * `bun build --compile`. The exact application-owned Sharp version is injected
+ * for Core's pre-import guard. The ONNX runtime shared library is copied
+ * alongside the binary.
  *
  * Usage:
  *   bun run build.ts                    # build for current platform
  *   bun run build.ts --target bun-linux-x64   # cross-compile
  */
 
-import { mkdirSync, cpSync, rmSync, symlinkSync, readlinkSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  cpSync,
+  rmSync,
+  symlinkSync,
+  readlinkSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { platform, arch } from "node:os";
+import { createRequire } from "node:module";
 
 /** Resolve the ONNX runtime base path dynamically from node_modules. */
 function resolveOnnxBase(): string {
@@ -32,7 +43,24 @@ function resolveOnnxBase(): string {
 }
 
 const ONNX_BASE = resolveOnnxBase();
-const SHARP_SYMLINK = "node_modules/.pnpm/@huggingface+transformers@3.8.1/node_modules/sharp";
+
+function resolveSharpRuntime(): { version: string; packageLink: string } {
+  const require = createRequire(import.meta.url);
+  const transformersEntry = require.resolve("@huggingface/transformers");
+  const requireFromTransformers = createRequire(transformersEntry);
+  const sharpEntry = requireFromTransformers.resolve("sharp");
+  const manifest = JSON.parse(
+    readFileSync(join(dirname(sharpEntry), "..", "package.json"), "utf-8"),
+  ) as { name?: unknown; version?: unknown };
+  if (manifest.name !== "sharp" || typeof manifest.version !== "string") {
+    throw new Error("Unable to verify the application-owned Sharp package");
+  }
+  const transformersRoot = dirname(dirname(transformersEntry));
+  return {
+    version: manifest.version,
+    packageLink: join(dirname(dirname(transformersRoot)), "sharp"),
+  };
+}
 
 interface PlatformFiles {
   onnxDir: string;
@@ -115,28 +143,35 @@ const outDir = join("dist", platformKey);
 
 console.log(`Building for ${platformKey}...`);
 
-// 1. Stub sharp in node_modules so bun doesn't bundle native sharp
-let sharpOrigTarget: string | null = null;
-if (existsSync(SHARP_SYMLINK)) {
-  try {
-    sharpOrigTarget = readlinkSync(SHARP_SYMLINK);
-  } catch {
-    // not a symlink, might already be stubbed
-  }
-  rmSync(SHARP_SYMLINK, { recursive: true, force: true });
+// Resolve the real application-owned Sharp before replacing the Transformers
+// link with a text-only compile shim. Core receives and verifies this exact
+// version before it invokes the bundled Transformers loader.
+const pkgVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
+const { version: sharpVersion, packageLink: sharpPackageLink } = resolveSharpRuntime();
+if (!existsSync(sharpPackageLink)) {
+  throw new Error(`Transformers Sharp link is missing: ${sharpPackageLink}`);
 }
-mkdirSync(SHARP_SYMLINK, { recursive: true });
-Bun.write(join(SHARP_SYMLINK, "package.json"), JSON.stringify({ name: "sharp", version: "0.0.0", main: "index.js" }));
-Bun.write(join(SHARP_SYMLINK, "index.js"), "module.exports = {};");
+let sharpOrigTarget: string;
+try {
+  sharpOrigTarget = readlinkSync(sharpPackageLink);
+} catch {
+  throw new Error(`Refusing to replace non-symlink Sharp path: ${sharpPackageLink}`);
+}
+rmSync(sharpPackageLink);
+mkdirSync(sharpPackageLink, { recursive: true });
+Bun.write(
+  join(sharpPackageLink, "package.json"),
+  JSON.stringify({ name: "sharp", version: sharpVersion, main: "index.js" }),
+);
+Bun.write(join(sharpPackageLink, "index.js"), "module.exports = {};");
 
 try {
-  // 2. Compile (inject version at compile time via --define)
-  const pkgVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
   mkdirSync(outDir, { recursive: true });
   const outFile = join(outDir, platConfig.binaryName);
   const args = [
     "build", "--compile", "src/main.ts", "--outfile", outFile,
     "--define", `process.env.SKILL_ROUTER_VERSION='"${pkgVersion}"'`,
+    "--define", `MEMEX_BUNDLED_SHARP_VERSION='"${sharpVersion}"'`,
   ];
   if (targetFlag) {
     args.push("--target", targetFlag);
@@ -144,7 +179,7 @@ try {
 
   execSync(`bun ${args.join(" ")}`, { stdio: "inherit" });
 
-  // 3. Copy ONNX shared libraries alongside binary
+  // Copy ONNX shared libraries alongside binary.
   for (const lib of platConfig.sharedLibs) {
     const src = join(platConfig.onnxDir, lib);
     const dest = join(outDir, lib);
@@ -158,10 +193,7 @@ try {
 
   console.log(`\nBuild complete: ${outDir}/`);
 } finally {
-  // 4. Restore sharp symlink
-  rmSync(SHARP_SYMLINK, { recursive: true, force: true });
-  if (sharpOrigTarget) {
-    symlinkSync(sharpOrigTarget, SHARP_SYMLINK);
-    console.log("Restored sharp symlink");
-  }
+  rmSync(sharpPackageLink, { recursive: true, force: true });
+  symlinkSync(sharpOrigTarget, sharpPackageLink);
+  console.log("Restored sharp symlink");
 }
