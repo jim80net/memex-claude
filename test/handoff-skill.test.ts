@@ -11,11 +11,11 @@ const skill = readFileSync(
 );
 const absolutePathToken = "<absolute-written-handoff-path>";
 
-function takeoverTemplate(): string {
-  const stepNine = skill.split("### 9. Tell the user how to take over")[1];
+function takeoverTemplate(source = skill): string {
+  const stepNine = source.split("### 9. Tell the user how to take over")[1];
   if (!stepNine) throw new Error("handoff step 9 is missing");
 
-  const block = stepNine.match(/```(?:text)?\n([\s\S]*?)\n```/)?.[1];
+  const block = stepNine.match(/```(?:text)?\r?\n([\s\S]*?)\r?\n```/)?.[1];
   if (!block) throw new Error("handoff completion template is missing");
   return block;
 }
@@ -29,6 +29,12 @@ describe("/handoff absolute path contract", () => {
     expect(template.match(new RegExp(absolutePathToken, "g"))).toHaveLength(2);
     expect(template).toContain(`/takeover ${absolutePathToken}`);
     expect(template).not.toContain("/takeover .claude/handoffs/");
+  });
+
+  it("recognizes the completion contract after a CRLF checkout", () => {
+    const template = takeoverTemplate(skill.replaceAll("\n", "\r\n"));
+
+    expect(template).toContain(`/takeover ${absolutePathToken}`);
   });
 
   it("renders a takeover command independent of the next session cwd", () => {
