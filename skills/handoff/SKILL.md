@@ -109,6 +109,12 @@ Everything that would be lost with the context window:
 
 Write to: `<cwd>/.claude/handoffs/<YYYYMMDD>-<kebab-case-title>.md`
 
+After the write succeeds, resolve **that exact file** to an absolute path and
+retain it as `<absolute-written-handoff-path>`. Use the current worktree's
+actual path (the platform-equivalent of resolving the written file with
+`realpath`); do not reconstruct the path from a later cwd, substitute a main
+checkout path, or assume the next session starts in this directory.
+
 Use this structure:
 
 ```markdown
@@ -197,7 +203,7 @@ Use this structure:
 
 ## To Resume
 
-1. Read this file: `cat .claude/handoffs/<filename>.md`
+1. Read this file: `cat <absolute-written-handoff-path>`
 2. <Verify state command>
 3. <First concrete action>
 ```
@@ -214,13 +220,21 @@ Update the file with any corrections.
 ### 9. Tell the user how to take over
 
 ```
-To continue, start a new session and say:
+Handoff written to:
 
-  /takeover .claude/handoffs/<YYYYMMDD>-<title>.md
+  <absolute-written-handoff-path>
+
+To continue in a fresh session:
+
+  /takeover <absolute-written-handoff-path>
 ```
 
 ## Guidelines
 
+- **Report the absolute path of the file actually written.** Reuse the same
+  `<absolute-written-handoff-path>` value in the completion and `/takeover`
+  command. This must remain valid from a different cwd, including when the
+  handoff was created inside a worktree.
 - **Spare no necessary detail.** The next session has zero context. Everything that matters must be written down. A long handoff that prevents hours of re-discovery is worth it.
 - **Be specific, not generic.** File paths, branch names, commit hashes, PR URLs, exact error messages, benchmark values, cost figures — anything the next session would need to look up, include directly.
 - **Explain the why.** Decisions without rationale will be re-evaluated from scratch.
