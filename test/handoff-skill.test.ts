@@ -32,7 +32,8 @@ describe("/handoff absolute path contract", () => {
   });
 
   it("recognizes the completion contract after a CRLF checkout", () => {
-    const template = takeoverTemplate(skill.replaceAll("\n", "\r\n"));
+    const crlfSkill = skill.replaceAll("\r\n", "\n").replaceAll("\n", "\r\n");
+    const template = takeoverTemplate(crlfSkill);
 
     expect(template).toContain(`/takeover ${absolutePathToken}`);
   });
