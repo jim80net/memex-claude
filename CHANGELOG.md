@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/jim80net/memex-claude/compare/v1.9.0...v1.9.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* report absolute handoff paths ([#63](https://github.com/jim80net/memex-claude/issues/63)) ([0244c68](https://github.com/jim80net/memex-claude/commit/0244c68fc025b455f687e8dd3544b1f99f0ff535))
+
 ## [1.9.0](https://github.com/jim80net/memex-claude/compare/v1.8.0...v1.9.0) (2026-07-17)
 
 
