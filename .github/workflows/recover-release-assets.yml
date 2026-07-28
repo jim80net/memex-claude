@@ -153,8 +153,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Stage independently reviewed recovery build driver
+        shell: bash
+        env:
+          MAIN_SHA: ${{ needs.preflight.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p build-support
+          git show "$MAIN_SHA:build.ts" > build.recovery.ts
+          git show "$MAIN_SHA:build-support/sharp-compile-shim.ts" > build-support/sharp-compile-shim.ts
+          echo "Building immutable tag source with recovery driver from main $MAIN_SHA"
+
       - name: Build binary
-        run: bun run build.ts --target ${{ matrix.bun-target }}
+        run: bun run build.recovery.ts --target ${{ matrix.bun-target }}
 
       - name: Package Unix artifact
         if: runner.os != 'Windows'
