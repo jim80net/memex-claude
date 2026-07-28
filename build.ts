@@ -15,8 +15,6 @@
 import {
   mkdirSync,
   cpSync,
-  rmSync,
-  symlinkSync,
   readlinkSync,
   existsSync,
   readdirSync,
@@ -26,6 +24,7 @@ import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { platform, arch } from "node:os";
 import { createRequire } from "node:module";
+import { installSharpCompileShim } from "./build-support/sharp-compile-shim";
 
 /** Resolve the ONNX runtime base path dynamically from node_modules. */
 function resolveOnnxBase(): string {
@@ -151,19 +150,12 @@ const { version: sharpVersion, packageLink: sharpPackageLink } = resolveSharpRun
 if (!existsSync(sharpPackageLink)) {
   throw new Error(`Transformers Sharp link is missing: ${sharpPackageLink}`);
 }
-let sharpOrigTarget: string;
 try {
-  sharpOrigTarget = readlinkSync(sharpPackageLink);
+  readlinkSync(sharpPackageLink);
 } catch {
   throw new Error(`Refusing to replace non-symlink Sharp path: ${sharpPackageLink}`);
 }
-rmSync(sharpPackageLink);
-mkdirSync(sharpPackageLink, { recursive: true });
-Bun.write(
-  join(sharpPackageLink, "package.json"),
-  JSON.stringify({ name: "sharp", version: sharpVersion, main: "index.js" }),
-);
-Bun.write(join(sharpPackageLink, "index.js"), "module.exports = {};");
+const restoreSharpLink = installSharpCompileShim(sharpPackageLink, sharpVersion);
 
 try {
   mkdirSync(outDir, { recursive: true });
@@ -193,7 +185,6 @@ try {
 
   console.log(`\nBuild complete: ${outDir}/`);
 } finally {
-  rmSync(sharpPackageLink, { recursive: true, force: true });
-  symlinkSync(sharpOrigTarget, sharpPackageLink);
+  restoreSharpLink();
   console.log("Restored sharp symlink");
 }
