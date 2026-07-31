@@ -124,9 +124,8 @@ ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 When `sync.enabled: true` in `~/.claude/memex.json`, memex projects origin rules into `~/.claude/rules` as **symlinks** (fail-closed; never overwrites real files).
 
 ```bash
-# Pin (expect @jim80net/memex-core ^0.6.0)
-node -e "console.log(require('./node_modules/@jim80net/memex-core/package.json').version)" 2>/dev/null \
-  || cat node_modules/@jim80net/memex-core/package.json 2>/dev/null | head -5
+# Core declaration + exact lock resolution (derived; no version literal)
+node "$PLUGIN_ROOT/scripts/inspect-core-pin.mjs" --root "$PLUGIN_ROOT"
 
 # Effective origin (resolver: ~/.memex → XDG → legacy-claude)
 ls -la ~/.memex/rules 2>/dev/null | head
