@@ -229,7 +229,7 @@ function verifyRelease(releaseDir, report) {
       check(report, `release checksum ${name}`, actual === expected, `${actual}; expected ${expected}`);
     }
     const extras = readdirSync(releaseDir)
-      .filter((name) => name !== "checksums.txt" && !name.startsWith("."))
+      .filter((name) => name !== "checksums.txt")
       .filter((name) => !entries.has(name));
     check(report, "release artifact inventory", extras.length === 0, `unexpected: ${extras.join(", ") || "none"}`);
     report.release = {

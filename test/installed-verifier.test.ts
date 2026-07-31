@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -139,6 +138,17 @@ describe("read-only installed verifier", () => {
     const result = run(fixture);
     expect(result.status).toBe(1);
     expect(result.report.failures.join("\n")).toContain("release checksum memex-linux-x64.tar.gz");
+  });
+
+  it("fails on an undeclared hidden release artifact", () => {
+    const fixture = createFixture();
+    writeFileSync(join(fixture.releaseDir, ".undeclared"), "hostile metadata\n");
+    const result = run(fixture);
+    expect(result.status).toBe(1);
+    expect(result.report).toMatchObject({ ok: false });
+    expect(result.report.failures.join("\n")).toContain(
+      "release artifact inventory: unexpected: .undeclared",
+    );
   });
 
   it("fails on an absolute handoff contract regression even when source matches", () => {
