@@ -9,17 +9,17 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const script = join(repoRoot, "scripts", "inspect-core-pin.mjs");
 const cleanup: string[] = [];
 
-function fixture(specifier = "^0.7.2") {
+function fixture(specifier = "^0.7.3") {
   const root = mkdtempSync(join(tmpdir(), "memex-core-pin-"));
   cleanup.push(root);
   mkdirSync(root, { recursive: true });
   writeFileSync(
     join(root, "package.json"),
-    JSON.stringify({ dependencies: { "@jim80net/memex-core": "^0.7.2" } }),
+    JSON.stringify({ dependencies: { "@jim80net/memex-core": "^0.7.3" } }),
   );
   writeFileSync(
     join(root, "pnpm-lock.yaml"),
-    `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      '@jim80net/memex-core':\n        specifier: ${specifier}\n        version: 0.7.2(@types/node@22.0.0)\n`,
+    `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      '@jim80net/memex-core':\n        specifier: ${specifier}\n        version: 0.7.3(@types/node@22.0.0)\n`,
   );
   return root;
 }
@@ -36,8 +36,8 @@ describe("Core pin inspector", () => {
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({
       package: "@jim80net/memex-core",
-      declaration: "^0.7.2",
-      resolvedVersion: "0.7.2",
+      declaration: "^0.7.3",
+      resolvedVersion: "0.7.3",
     });
   });
 
@@ -46,7 +46,7 @@ describe("Core pin inspector", () => {
       encoding: "utf8",
     });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("package.json declares ^0.7.2");
+    expect(result.stderr).toContain("package.json declares ^0.7.3");
   });
 
   it("keeps the doctor skill free of a hard-coded Core expectation", () => {

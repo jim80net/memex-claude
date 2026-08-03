@@ -17,8 +17,8 @@ importers:
         specifier: ^3.8.1
         version: 3.8.1(@types/node@22.19.15)
       '@jim80net/memex-core':
-        specifier: ^0.7.2
-        version: 0.7.2(@types/node@22.19.15)
+        specifier: ^0.7.3
+        version: 0.7.3(@types/node@22.19.15)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -351,8 +351,8 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
-  '@jim80net/memex-core@0.7.2':
-    resolution: {integrity: sha512-pMmv6TWk+4NerdxRWTaAP4vQffu5GDS3+vCFP40JYmy8RxvlmrZFYhpfYsUl6Ni3Qfw/5xop0WC8r1D8Db4vCg==}
+  '@jim80net/memex-core@0.7.3':
+    resolution: {integrity: sha512-xbSs9H54ljeepDPdBJ0FJUi9OmKSGjxPPe3mYprZ7WMsfxuy+xei5PITVut/+4Py87S6mg8cEIL461pTSBCvfA==}
     hasBin: true
 
   '@jridgewell/sourcemap-codec@1.5.5':
@@ -1139,7 +1139,7 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  '@jim80net/memex-core@0.7.2(@types/node@22.19.15)':
+  '@jim80net/memex-core@0.7.3(@types/node@22.19.15)':
     optionalDependencies:
       '@huggingface/transformers': 3.8.1(@types/node@22.19.15)
     transitivePeerDependencies:
