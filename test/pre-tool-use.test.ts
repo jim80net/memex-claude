@@ -99,12 +99,12 @@ describe("handlePreToolUse", () => {
       {
         hook_event_name: "PreToolUse",
         tool_name: "Edit",
-        tool_input: { file_path: "/home/user/project/src/index.ts" },
+        tool_input: { file_path: "/test-home/project/src/index.ts" },
       },
       index,
       BASE_CONFIG
     );
 
-    expect(searchFn.mock.calls[0][0]).toContain("/home/user/project/src/index.ts");
+    expect(searchFn.mock.calls[0][0]).toContain("/test-home/project/src/index.ts");
   });
 });

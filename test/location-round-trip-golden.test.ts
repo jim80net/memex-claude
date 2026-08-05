@@ -11,32 +11,35 @@ import {
 } from "@jim80net/memex-core";
 import { LOCATION_ROUND_TRIP_GOLDEN } from "./fixtures/cross-adapter/location-round-trip-golden.ts";
 
+// Deployment-neutral synthetic home for absolute-path conformance fixtures.
+const TEST_HOME = "/test-home";
+
 const FIXTURE_CTX: ScanRootContext = {
-  cwd: resolve("/home/user/project"),
+  cwd: resolve(`${TEST_HOME}/project`),
   syncEnabled: true,
-  syncRepoDir: resolve("/home/user/.memex/sync"),
+  syncRepoDir: resolve(`${TEST_HOME}/.memex/sync`),
   globalSkillsDirs: [
-    resolve("/home/user/.grok/skills"),
-    resolve("/home/user/.claude/skills"),
+    resolve(`${TEST_HOME}/.grok/skills`),
+    resolve(`${TEST_HOME}/.claude/skills`),
   ],
-  globalRulesDirs: [resolve("/home/user/.grok/rules")],
-  projectSkillsDir: resolve("/home/user/project/.grok/skills"),
-  projectRulesDir: resolve("/home/user/project/.grok/rules"),
+  globalRulesDirs: [resolve(`${TEST_HOME}/.grok/rules`)],
+  projectSkillsDir: resolve(`${TEST_HOME}/project/.grok/skills`),
+  projectRulesDir: resolve(`${TEST_HOME}/project/.grok/rules`),
   harness: "grok",
 };
 
 function fixtureRegistry() {
   const registry = buildScanRoots(FIXTURE_CTX, {
     skillDirs: [
-      resolve("/home/user/.grok/skills"),
-      resolve("/home/user/project/.grok/skills"),
-      resolve("/home/user/.memex/sync/skills"),
+      resolve(`${TEST_HOME}/.grok/skills`),
+      resolve(`${TEST_HOME}/project/.grok/skills`),
+      resolve(`${TEST_HOME}/.memex/sync/skills`),
       resolve("/opt/extra/skills"),
     ],
-    memoryDirs: [resolve("/home/user/project/.grok/memories")],
+    memoryDirs: [resolve(`${TEST_HOME}/project/.grok/memories`)],
     ruleDirs: [
-      resolve("/home/user/.grok/rules"),
-      resolve("/home/user/.memex/sync/rules"),
+      resolve(`${TEST_HOME}/.grok/rules`),
+      resolve(`${TEST_HOME}/.memex/sync/rules`),
     ],
   });
 

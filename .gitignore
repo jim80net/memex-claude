@@ -6,6 +6,9 @@ dist/
 .env.*
 .claude/settings.local.json
 
+# Session handoffs are local continuity artifacts, not repository content.
+.claude/handoffs/
+
 # Prebuilt binary (downloaded by bin/install.sh, not checked in)
 bin/memex.bin
 bin/memex.exe
