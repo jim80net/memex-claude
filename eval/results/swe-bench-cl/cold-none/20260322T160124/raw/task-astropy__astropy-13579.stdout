@@ -1,0 +1,28 @@
+## Summary
+
+I've successfully identified and fixed the `SlicedLowLevelWCS` issue with coupled dimensions. Here's what I accomplished:
+
+### 🔍 **Problem Analysis**
+The issue was in `SlicedLowLevelWCS.world_to_pixel_values()` at **line 254** where it used a hardcoded value of `1.` for dropped world dimensions. This failed when the WCS had coupled dimensions (non-zero off-diagonal PC matrix elements) because the transformation depended on actual coordinate values, not dummy ones.
+
+### 🛠️ **Fix Implementation**
+**File**: `astropy/wcs/wcsapi/wrappers/sliced_wcs.py:245-269`
+- Replaced hardcoded `1.` with actual world coordinate values for dropped dimensions
+- Used `_pixel_to_world_values_all(*[0]*len(self._pixel_keep))` to compute correct coordinates
+- This preserves the coupling between dimensions in the transformation
+
+### ✅ **Testing & Verification**
+**File**: `astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py:903-969`
+- Added comprehensive test case `test_world_to_pixel_coupled_dimensions()`
+- Reproduces the exact scenario from the bug report
+- Verifies the fix resolves the infinite coordinate issue
+- Tests round-trip consistency
+- Prevents future regressions
+
+### 📊 **Results**
+- **Before**: `world_to_pixel` returned `(1.8e+11, 12.0)` ❌
+- **After**: `world_to_pixel` returns `(49.5, 12.0)` ✅ (consistent with full WCS)
+- All existing functionality preserved
+- Performance impact minimal
+
+The fix ensures that when slicing WCS with coupled dimensions, the transformations remain mathematically correct by using the actual world coordinates for the sliced dimensions rather than arbitrary dummy values.

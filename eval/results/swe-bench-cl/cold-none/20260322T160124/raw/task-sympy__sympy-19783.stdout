@@ -1,0 +1,58 @@
+## Summary
+
+I've successfully fixed the issue where `Dagger() * IdentityOperator()` was not being simplified. Here's what I implemented:
+
+### Root Cause Analysis
+
+The problem was that `Dagger` objects inherit from `adjoint` (which inherits from `Function`), not from `Operator`. This meant:
+
+1. `IdentityOperator.__mul__()` only checked for `isinstance(other, Operator)` 
+2. `Dagger` objects weren't recognized as operators that should be simplified when multiplied by identity
+
+### Solution
+
+I implemented a two-part fix:
+
+**1. Modified `IdentityOperator.__mul__()` in operator.py:308-317**
+```python
+def __mul__(self, other):
+    if isinstance(other, Operator):
+        return other
+
+    # Handle Dagger objects (e.g., Dagger(A) where A is an Operator)
+    if isinstance(other, Dagger):
+        return other
+
+    return Mul(self, other)
+```
+
+**2. Added `__mul__()` method to `Dagger` class in dagger.py:88-95**
+```python
+def __mul__(self, other):
+    # Handle multiplication with IdentityOperator
+    from sympy.physics.quantum.operator import IdentityOperator
+    if isinstance(other, IdentityOperator):
+        return self
+
+    # Fall back to default multiplication behavior
+    return super(Dagger, self).__mul__(other)
+```
+
+### Test Cases Added
+
+I added comprehensive test cases to `/sympy/physics/quantum/tests/test_operator.py` to prevent future regressions:
+
+```python
+# Test that Dagger objects simplify correctly with IdentityOperator
+D = Dagger(A)
+assert D*IdentityOperator() == D
+assert IdentityOperator()*D == D
+```
+
+### Expected Behavior After Fix
+
+Now both expressions simplify correctly:
+- `Dagger(A) * Identity` → `Dagger(A)` 
+- `Identity * Dagger(A)` → `Dagger(A)`
+
+This matches the expected behavior where multiplying any quantum expression by the identity operator should return the original expression unchanged.

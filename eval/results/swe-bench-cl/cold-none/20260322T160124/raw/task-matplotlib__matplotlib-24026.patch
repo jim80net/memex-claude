@@ -1,0 +1,60 @@
+diff --git a/lib/matplotlib/stackplot.py b/lib/matplotlib/stackplot.py
+index c580043eeb..c9e5dd1f27 100644
+--- a/lib/matplotlib/stackplot.py
++++ b/lib/matplotlib/stackplot.py
+@@ -9,10 +9,44 @@ https://stackoverflow.com/q/2225995/
+ import numpy as np
+ 
+ from matplotlib import _api
++from matplotlib import colors as mcolors
++import matplotlib as mpl
+ 
+ __all__ = ['stackplot']
+ 
+ 
++def _resolve_colors(colors):
++    """
++    Resolve 'CN' style color references to actual color values.
++
++    Parameters
++    ----------
++    colors : list
++        List of color specifications that may include 'CN' style references.
++
++    Returns
++    -------
++    list
++        List of resolved colors where 'CN' references are replaced with actual color values.
++    """
++    if colors is None:
++        return colors
++
++    resolved_colors = []
++
++    for color in colors:
++        if mcolors._is_nth_color(color):
++            # Resolve CN color to actual color value
++            prop_cycler = mpl.rcParams['axes.prop_cycle']
++            cycler_colors = prop_cycler.by_key().get('color', ['k'])
++            resolved_color = cycler_colors[int(color[1:]) % len(cycler_colors)]
++            resolved_colors.append(resolved_color)
++        else:
++            resolved_colors.append(color)
++
++    return resolved_colors
++
++
+ def stackplot(axes, x, *args,
+               labels=(), colors=None, baseline='zero',
+               **kwargs):
+@@ -70,7 +104,9 @@ def stackplot(axes, x, *args,
+ 
+     labels = iter(labels)
+     if colors is not None:
+-        axes.set_prop_cycle(color=colors)
++        # Resolve CN-style color references before setting prop_cycle
++        resolved_colors = _resolve_colors(colors)
++        axes.set_prop_cycle(color=resolved_colors)
+ 
+     # Assume data passed has not been 'stacked', so stack it here.
+     # We'll need a float buffer for the upcoming calculations.

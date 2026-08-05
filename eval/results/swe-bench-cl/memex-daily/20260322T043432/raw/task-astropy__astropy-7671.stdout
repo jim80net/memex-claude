@@ -1,0 +1,34 @@
+## Summary
+
+I have successfully fixed the `minversion` function bug reported in the issue. Here's what was accomplished:
+
+### Problem Analysis
+- PR #7647 removed a workaround for LooseVersion bugs, but the underlying issue still exists
+- `LooseVersion('1.14.3') >= LooseVersion('1.14dev')` fails with `TypeError: '<' not supported between instances of 'int' and 'str'`
+- This occurs because LooseVersion tries to compare `[2, 1, 0]` with `[2, 1, 'dev']`
+
+### Solution Implemented
+I added a robust fallback mechanism in `/eval/workdir/astropy_astropy/astropy/utils/introspection.py`:
+
+1. **Added `_compare_versions` helper function** that:
+   - First attempts normal LooseVersion comparison
+   - Falls back to custom parsing when LooseVersion raises TypeError
+   - Properly handles dev versions and version specificity
+   - Maintains LooseVersion-compatible behavior for working cases
+
+2. **Updated `minversion` function** to use the new helper instead of direct LooseVersion calls
+
+### Key Features of the Fix
+- **Backward Compatible**: All existing functionality continues to work exactly as before
+- **Bug-Resistant**: Handles the problematic cases that cause LooseVersion to fail
+- **Semantic Correctness**: Follows version comparison semantics where:
+  - `'1.14.3' >= '1.14dev'` returns `True` (more specific version beats dev version)
+  - `'1.14' >= '1.14dev'` returns `False` (maintains original LooseVersion behavior)
+  - `'2.1.0' >= '2.1dev'` returns `True` (handles the TypeError case properly)
+
+### Testing Results
+✅ **All existing astropy tests pass** - No regressions introduced  
+✅ **Original bug cases now work** - No more TypeError exceptions  
+✅ **Edge cases handled correctly** - Comprehensive test coverage
+
+The fix resolves the immediate TypeError while preserving all existing behavior, making `minversion` robust against the LooseVersion bugs without requiring external dependencies.

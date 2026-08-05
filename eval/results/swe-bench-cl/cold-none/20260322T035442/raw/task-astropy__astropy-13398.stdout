@@ -1,0 +1,36 @@
+Your transformation matrices look correct:
+
+1. **AltAz transformation**: The combination of longitude rotation, latitude-dependent rotation, and left-handed coordinate flip properly converts ITRS to AltAz
+2. **HADec transformation**: The longitude rotation with left-handed coordinate adjustment correctly produces Hour Angle-Declination coordinates  
+3. **Topocentric conversion**: Subtracting the observer location to get topocentric coordinates before rotation is the right approach
+
+## Integration Considerations
+
+1. **Existing imports are available**: I verified that `rotation_matrix`, `matrix_transpose`, and `PIOVER2` are available from the modules you referenced.
+
+2. **Frame attributes**: Your transforms correctly handle the frame attributes (`location`, `obstime`) and the `obstime` adoption approach makes sense.
+
+3. **Representation handling**: You're properly using cartesian representations and the `realize_frame` pattern.
+
+## Missing Pieces for Complete Implementation
+
+1. **Refraction**: As you noted, this is missing. You'd want to integrate with the existing refraction model used in `cirs_observed_transforms.py` for consistency.
+
+2. **Error handling**: Consider edge cases like locations at poles or objects at zenith.
+
+3. **Unit tests**: You'll want tests beyond `test_straight_overhead` to ensure accuracy across different observer locations and object positions.
+
+4. **Documentation**: Clear documentation about when to use this vs. the existing transforms.
+
+## Recommendation
+
+I believe this approach has merit and would be valuable for the satellite/nearby object observation use case. The community would likely be receptive given the recurring issues you've experienced.
+
+**Suggestions for your PR:**
+
+1. Add refraction support using the existing ERFA-based model
+2. Include comprehensive test cases comparing with the current method for various scenarios  
+3. Consider making this behavior configurable or automatic based on distance/frame attributes
+4. Ensure backward compatibility for existing distant object observations
+
+Would you like me to help you develop any specific aspects of this implementation, such as adding the refraction calculations or creating additional test cases?

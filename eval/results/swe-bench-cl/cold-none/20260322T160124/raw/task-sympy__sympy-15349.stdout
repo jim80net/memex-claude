@@ -1,0 +1,48 @@
+## Summary
+
+You were absolutely correct about the bug in `Quaternion.to_rotation_matrix()`. I've identified and fixed the issue. Here's what I found:
+
+### The Problem
+
+The issue was on **line 532** of `/eval/workdir/sympy_sympy/sympy/algebras/quaternion.py` in the calculation of matrix element `m12`:
+
+```python
+# BUGGY (original):
+m12 = 2*s*(q.c*q.d + q.b*q.a)
+
+# FIXED:
+m12 = 2*s*(q.c*q.d - q.b*q.a)  # Changed + to -
+```
+
+### Root Cause
+
+The standard formula for converting a unit quaternion q = (a, b, c, d) to a rotation matrix has the entry [1,2] as:
+- **Correct**: `2(cd - ba)`  
+- **Buggy**: `2(cd + ba)`  ← This was the issue
+
+### Verification
+
+I created a manual verification script that confirms:
+
+1. **X-axis rotation fix works**: For quaternion `(cos(x/2), sin(x/2), 0, 0)`, the problematic matrix element [1,2] now correctly produces `-sin(x)` instead of `sin(x)`
+
+2. **No regression**: Z-axis rotation `(cos(θ/2), 0, 0, sin(θ/2))` continues to work correctly since for this case `cd - ba = 0*sin(θ/2) - 0*cos(θ/2) = 0`
+
+### Changes Made
+
+1. **Fixed the bug**: Changed line 532 in `quaternion.py` from addition to subtraction
+2. **Added test coverage**: Added a specific test case for X-axis rotation to `test_quaternion.py` to prevent regression:
+
+```python
+# Test for X-axis rotation (the reported bug case)  
+phi = symbols("phi", real=True)
+q3 = Quaternion(cos(phi/2), sin(phi/2), 0, 0)
+
+assert trigsimp(q3.to_rotation_matrix()) == Matrix([
+    [1,      0,      0],
+    [0, cos(phi), -sin(phi)],  # This -sin(phi) was previously +sin(phi)
+    [0, sin(phi),  cos(phi)]
+])
+```
+
+The fix resolves the incorrect sign in rotation matrices around the X-axis while maintaining compatibility with existing functionality.

@@ -1,0 +1,65 @@
+diff --git a/src/_pytest/unittest.py b/src/_pytest/unittest.py
+index 719eb4e88..3f88d7a9e 100644
+--- a/src/_pytest/unittest.py
++++ b/src/_pytest/unittest.py
+@@ -144,7 +144,7 @@ def _make_xunit_fixture(
+         scope=scope,
+         autouse=True,
+         # Use a unique name to speed up lookup.
+-        name=f"unittest_{setup_name}_fixture_{obj.__qualname__}",
++        name=f"_unittest_{setup_name}_fixture_{obj.__qualname__}",
+     )
+     def fixture(self, request: FixtureRequest) -> Generator[None, None, None]:
+         if _is_skipped(self):
+diff --git a/testing/test_unittest.py b/testing/test_unittest.py
+index 69bafc26d..047b556ad 100644
+--- a/testing/test_unittest.py
++++ b/testing/test_unittest.py
+@@ -1438,3 +1438,47 @@ def test_do_cleanups_on_teardown_failure(pytester: Pytester) -> None:
+     passed, skipped, failed = reprec.countoutcomes()
+     assert failed == 2
+     assert passed == 1
++
++
++def test_unittest_setUpClass_fixture_not_visible_without_v_flag(pytester: Pytester) -> None:
++    """unittest setUpClass fixtures should be private (only shown with -v flag)."""
++    testpath = pytester.makepyfile(
++        """
++        import unittest
++        class MyTestCase(unittest.TestCase):
++            @classmethod
++            def setUpClass(cls):
++                pass
++            def test_example(self):
++                pass
++    """
++    )
++    # Check that unittest setUpClass fixture is not shown without -v flag
++    result = pytester.runpytest("--fixtures", testpath)
++    result.stdout.no_fnmatch_line("*unittest_setUpClass_fixture_MyTestCase*")
++
++    # Check that unittest setUpClass fixture is shown with -v flag
++    result_verbose = pytester.runpytest("--fixtures", "-v", testpath)
++    result_verbose.stdout.fnmatch_lines(["*unittest_setUpClass_fixture_MyTestCase*"])
++
++
++def test_unittest_tearDownClass_fixture_not_visible_without_v_flag(pytester: Pytester) -> None:
++    """unittest tearDownClass fixtures should also be private (only shown with -v flag)."""
++    testpath = pytester.makepyfile(
++        """
++        import unittest
++        class MyTestCase(unittest.TestCase):
++            @classmethod
++            def tearDownClass(cls):
++                pass
++            def test_example(self):
++                pass
++    """
++    )
++    # Check that unittest tearDownClass fixture is not shown without -v flag
++    result = pytester.runpytest("--fixtures", testpath)
++    result.stdout.no_fnmatch_line("*unittest_tearDownClass_fixture_MyTestCase*")
++
++    # Check that unittest tearDownClass fixture is shown with -v flag
++    result_verbose = pytester.runpytest("--fixtures", "-v", testpath)
++    result_verbose.stdout.fnmatch_lines(["*unittest_tearDownClass_fixture_MyTestCase*"])

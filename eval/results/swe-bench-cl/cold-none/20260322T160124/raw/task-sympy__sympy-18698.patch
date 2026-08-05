@@ -1,0 +1,128 @@
+diff --git a/sympy/polys/sqfreetools.py b/sympy/polys/sqfreetools.py
+index 1783a7744a..3c19bab452 100644
+--- a/sympy/polys/sqfreetools.py
++++ b/sympy/polys/sqfreetools.py
+@@ -5,7 +5,7 @@
+ from sympy.polys.densearith import (
+     dup_neg, dmp_neg,
+     dup_sub, dmp_sub,
+-    dup_mul,
++    dup_mul, dmp_mul,
+     dup_quo, dmp_quo,
+     dup_mul_ground, dmp_mul_ground)
+ from sympy.polys.densebasic import (
+@@ -332,7 +332,26 @@ def dup_sqf_list(f, K, all=False):
+ 
+         i += 1
+ 
+-    return coeff, result
++    # Group factors by multiplicity and combine them
++    from collections import defaultdict
++    multiplicity_groups = defaultdict(list)
++    for factor, mult in result:
++        multiplicity_groups[mult].append(factor)
++
++    # Combine factors within each multiplicity group
++    combined_result = []
++    for mult in sorted(multiplicity_groups.keys()):
++        factors = multiplicity_groups[mult]
++        if len(factors) == 1:
++            combined_result.append((factors[0], mult))
++        else:
++            # Multiply all factors with the same multiplicity
++            combined_factor = factors[0]
++            for f in factors[1:]:
++                combined_factor = dup_mul(combined_factor, f, K)
++            combined_result.append((combined_factor, mult))
++
++    return coeff, combined_result
+ 
+ 
+ def dup_sqf_list_include(f, K, all=False):
+@@ -420,7 +439,26 @@ def dmp_sqf_list(f, u, K, all=False):
+ 
+         i += 1
+ 
+-    return coeff, result
++    # Group factors by multiplicity and combine them
++    from collections import defaultdict
++    multiplicity_groups = defaultdict(list)
++    for factor, mult in result:
++        multiplicity_groups[mult].append(factor)
++
++    # Combine factors within each multiplicity group
++    combined_result = []
++    for mult in sorted(multiplicity_groups.keys()):
++        factors = multiplicity_groups[mult]
++        if len(factors) == 1:
++            combined_result.append((factors[0], mult))
++        else:
++            # Multiply all factors with the same multiplicity
++            combined_factor = factors[0]
++            for f in factors[1:]:
++                combined_factor = dmp_mul(combined_factor, f, u, K)
++            combined_result.append((combined_factor, mult))
++
++    return coeff, combined_result
+ 
+ 
+ def dmp_sqf_list_include(f, u, K, all=False):
+diff --git a/sympy/polys/tests/test_polytools.py b/sympy/polys/tests/test_polytools.py
+index 82e5f4d6dd..fc7a3999bc 100644
+--- a/sympy/polys/tests/test_polytools.py
++++ b/sympy/polys/tests/test_polytools.py
+@@ -2295,6 +2295,17 @@ def test_sqf():
+ 
+     assert F.sqf_list_include() == [(G, 1), (H, 2)]
+ 
++    # Test that factors with the same multiplicity are combined correctly
++    # Issue: (x**2 + 1) * (x - 1)**2 * (x - 2)**3 * (x - 3)**3 should combine factors with multiplicity 3
++    expr = (x**2 + 1) * (x - 1)**2 * (x - 2)**3 * (x - 3)**3
++    expected = (1, [(x**2 + 1, 1), (x - 1, 2), (x**2 - 5*x + 6, 3)])
++    assert sqf_list(expr) == expected
++
++    # Test simpler case: (x - 1)**2 * (x - 2)**2
++    expr2 = (x - 1)**2 * (x - 2)**2
++    expected2 = (1, [(x**2 - 3*x + 2, 2)])
++    assert sqf_list(expr2) == expected2
++
+     raises(ComputationFailed, lambda: sqf_part(4))
+ 
+     assert sqf(1) == 1
+diff --git a/sympy/polys/tests/test_sqfreetools.py b/sympy/polys/tests/test_sqfreetools.py
+index abe229e713..2f80997e07 100644
+--- a/sympy/polys/tests/test_sqfreetools.py
++++ b/sympy/polys/tests/test_sqfreetools.py
+@@ -137,6 +137,32 @@ def test_dmp_sqf():
+     raises(NotImplementedError, lambda: R.dmp_sqf_list(y**2 + 1))
+ 
+ 
++def test_sqf_list_same_multiplicity():
++    """Test that factors with the same multiplicity are combined correctly."""
++    R, x = ring("x", ZZ)
++
++    # Test case from issue: (x**2 + 1) * (x - 1)**2 * (x - 2)**3 * (x - 3)**3
++    # Factors with multiplicity 3 should be combined: (x - 2) * (x - 3) = x**2 - 5*x + 6
++    f = (x**2 + 1) * (x - 1)**2 * (x - 2)**3 * (x - 3)**3
++    result = R.dmp_sqf_list(f)
++    expected = (1, [(x**2 + 1, 1), (x - 1, 2), (x**2 - 5*x + 6, 3)])
++    assert result == expected
++
++    # Test simpler case: (x - 1)**2 * (x - 2)**2
++    # Should give (x - 1) * (x - 2) = x**2 - 3*x + 2 with multiplicity 2
++    f2 = (x - 1)**2 * (x - 2)**2
++    result2 = R.dmp_sqf_list(f2)
++    expected2 = (1, [(x**2 - 3*x + 2, 2)])
++    assert result2 == expected2
++
++    # Test three factors with same multiplicity: (x - 1)**3 * (x - 2)**3 * (x - 3)**3
++    # Should give (x - 1) * (x - 2) * (x - 3) = x**3 - 6*x**2 + 11*x - 6 with multiplicity 3
++    f3 = (x - 1)**3 * (x - 2)**3 * (x - 3)**3
++    result3 = R.dmp_sqf_list(f3)
++    expected3 = (1, [(x**3 - 6*x**2 + 11*x - 6, 3)])
++    assert result3 == expected3
++
++
+ def test_dup_gff_list():
+     R, x = ring("x", ZZ)
+ 

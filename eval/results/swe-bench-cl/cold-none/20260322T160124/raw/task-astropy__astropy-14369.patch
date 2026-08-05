@@ -1,0 +1,91 @@
+diff --git a/astropy/io/ascii/tests/test_cds.py b/astropy/io/ascii/tests/test_cds.py
+index 0f5523cc9e..79234f513a 100644
+--- a/astropy/io/ascii/tests/test_cds.py
++++ b/astropy/io/ascii/tests/test_cds.py
+@@ -552,3 +552,71 @@ def test_write_skycoord_with_format():
+     lines = lines[i_bbb:]  # Select Byte-By-Byte section and following lines.
+     # Check the written table.
+     assert lines == exp_output
++
++
++def test_cds_composite_units_multiple_divisions():
++    """
++    Test reading MRT files with composite units containing multiple divisions.
++
++    This is a regression test for an issue where units with multiple divisions
++    were parsed with incorrect ordering of terms in numerator vs denominator.
++
++    The bug was that:
++    - `10+3J/m/s/kpc2` would be parsed as `1e+3 J s / (kpc2 m)` instead of `1e+3 J / (m s kpc2)`
++    - `10-7J/s/kpc2` would be parsed as `1e-7 J kpc2 / s` instead of `1e-7 J / (s kpc2)`
++    """
++    # Create test MRT content with composite units
++    mrt_content = '''Title: Test composite units
++Authors:
++Table: Test table
++================================================================================
++Byte-by-byte Description of file: test.dat
++--------------------------------------------------------------------------------
++   Bytes Format Units          Label      Explanations
++--------------------------------------------------------------------------------
++   1- 10 A10    ---            ID         Object identifier
++  12- 21 F10.5  10+3J/m/s/kpc2 SBCONT     Surface brightness continuum
++  23- 32 F10.5  10-7J/s/kpc2   SBLINE     Surface brightness line
++--------------------------------------------------------------------------------
++ID001      70.99200   38.51040
++ID002      13.05120   28.19240
++'''
++
++    # Read the table
++    table = ascii.read(mrt_content, format='cds')
++
++    # Check that the data was read correctly
++    assert len(table) == 2
++    assert table.colnames == ['ID', 'SBCONT', 'SBLINE']
++
++    # Check that units are parsed correctly
++    sbcont_unit = table['SBCONT'].unit
++    sbline_unit = table['SBLINE'].unit
++
++    # Check the unit structure
++    assert sbcont_unit.scale == 1000.0  # 10+3
++    assert sbline_unit.scale == 1e-7    # 10-7
++
++    # Check bases and powers for SBCONT: should be J / (m * s * kpc**2)
++    sbcont_bases = [str(base) for base in sbcont_unit.bases]
++    sbcont_powers = list(sbcont_unit.powers)
++    assert sbcont_bases == ['J', 'm', 's', 'kpc']
++    assert sbcont_powers == [1, -1, -1, -2]
++
++    # Check bases and powers for SBLINE: should be J / (s * kpc**2)
++    sbline_bases = [str(base) for base in sbline_unit.bases]
++    sbline_powers = list(sbline_unit.powers)
++    assert sbline_bases == ['J', 's', 'kpc']
++    assert sbline_powers == [1, -1, -2]
++
++    # Check string representation (this was the visible bug)
++    sbcont_str = str(sbcont_unit)
++    sbline_str = str(sbline_unit)
++
++    # Should have correct format with all division terms in denominator
++    assert "1000 J / (m s kpc2)" == sbcont_str
++    assert "1e-07 J / (s kpc2)" == sbline_str
++
++    # Ensure the buggy formats are not present
++    assert "J s / (kpc2 m)" not in sbcont_str
++    assert "J kpc2 / s" not in sbline_str
+diff --git a/astropy/units/tests/test_format.py b/astropy/units/tests/test_format.py
+index cad23e91be..e6789e2c6a 100644
+--- a/astropy/units/tests/test_format.py
++++ b/astropy/units/tests/test_format.py
+@@ -90,6 +90,10 @@ def test_unit_grammar_fail(string):
+         (["[cm/s2]"], dex(u.cm / u.s**2)),
+         (["[K]"], dex(u.K)),
+         (["[-]"], dex(u.dimensionless_unscaled)),
++        # Regression test for composite units with multiple divisions
++        # See https://github.com/astropy/astropy/issues/XXXXX
++        (["10+3J/m/s/kpc2"], u.Unit(1e3 * u.J / (u.m * u.s * u.kpc**2))),
++        (["10-7J/s/kpc2"], u.Unit(1e-7 * u.J / (u.s * u.kpc**2))),
+     ],
+ )
+ def test_cds_grammar(strings, unit):

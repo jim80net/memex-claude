@@ -1,0 +1,70 @@
+You're absolutely right about this API inconsistency! I've investigated the codebase and can confirm this issue exists. Here's what I found:
+
+## Current State
+
+**DataArray.integrate()** - uses `dim` parameter:
+```python
+def integrate(self, dim: Union[Hashable, Sequence[Hashable]], datetime_unit: str = None)
+```
+
+**Dataset.integrate()** - uses `coord` parameter:
+```python
+def integrate(self, coord, datetime_unit=None)
+```
+
+**Both differentiate methods** - consistently use `coord`:
+```python
+# DataArray.differentiate()
+def differentiate(self, coord: Hashable, edge_order: int = 1, datetime_unit: str = None)
+
+# Dataset.differentiate()  
+def differentiate(self, coord, edge_order=1, datetime_unit=None)
+```
+
+## Why This Works Currently
+
+The DataArray.integrate() method actually delegates to Dataset.integrate():
+
+```python
+def integrate(self, dim: Union[Hashable, Sequence[Hashable]], datetime_unit: str = None):
+    ds = self._to_temp_dataset().integrate(dim, datetime_unit)  # passes 'dim' as 'coord'
+    return self._from_temp_dataset(ds)
+```
+
+So despite the parameter being named `dim`, it's actually passed as the `coord` parameter to Dataset.integrate(), which explains why the current tests work.
+
+## Evidence from Tests
+
+Looking at `xarray/tests/test_dataset.py`, the tests confirm your point:
+
+```python
+da = xr.DataArray(
+    rs.randn(8, 6),
+    dims=["x", "y"], 
+    coords={"x": [0.2, 0.35, 0.4, 0.6, 0.7, 0.75, 0.76, 0.8]}  # coordinate with spacing
+)
+
+actual = da.integrate("x")  # Called with coordinate name, not dimension
+```
+
+The tests are passing coordinate names (with actual spacing information) to `DataArray.integrate()`, confirming that the method should indeed use `coord`.
+
+## Your Analysis is Correct
+
+You're absolutely right that:
+1. **Conceptually `coord` makes more sense** - integration requires spacing information between grid points, which comes from coordinates, not bare dimensions
+2. **API consistency matters** - all other calculus methods use `coord`
+3. **This helps new users** understand the distinction between dims and coords
+
+## Deprecation Cycle Question
+
+This change would likely need a deprecation cycle since:
+- It's a breaking API change in the method signature
+- External code might be using keyword arguments: `da.integrate(dim="x")`
+- The parameter name appears in documentation and examples
+
+A typical approach would be:
+1. Add a new `coord` parameter while keeping `dim` with a deprecation warning
+2. Eventually remove `dim` in a future major version
+
+This seems like a straightforward fix that would improve API consistency and user experience. The implementation should be simple since the underlying logic already expects coordinate names.

@@ -1,0 +1,93 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced89..4b136d7d4a 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,24 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # First, try the natural string representation of the value
++    natural_str = str(value)
++
++    # Check if the natural representation is valid and fits in 20 characters
++    if len(natural_str) <= 20:
++        # Ensure it has a decimal point (required for FITS floats)
++        if "." in natural_str or "E" in natural_str.upper():
++            # Natural representation is good, use it
++            value_str = natural_str
++        else:
++            # No decimal point, add one
++            value_str = natural_str + ".0"
++
++        # If it still fits, we're done
++        if len(value_str) <= 20:
++            return value_str
++
++    # Fall back to the original formatting approach
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
+diff --git a/astropy/io/fits/tests/test_header.py b/astropy/io/fits/tests/test_header.py
+index a8f4e1160f..3b75b08c34 100644
+--- a/astropy/io/fits/tests/test_header.py
++++ b/astropy/io/fits/tests/test_header.py
+@@ -137,6 +137,59 @@ class TestHeaderFunctions(FitsTestCase):
+         ):
+             assert str(c) == _pad("FLOATNUM= -4.6737463674763E+32")
+ 
++    def test_float_representation_optimization(self):
++        """Test that _format_float uses optimal string representations.
++
++        This test ensures that floats that can be represented compactly
++        using str() are not unnecessarily expanded using the .16G format.
++        Addresses issue where 0.009125 was expanded to 0.009124999999999999.
++        """
++        # Test the specific case from the bug report
++        c = fits.Card("TEST", 0.009125, "comment")
++        # The value should be represented as the compact "0.009125" not the expanded form
++        assert "0.009125" in str(c)
++        assert "0.009124999999999999" not in str(c)
++
++        # Test other cases that should use compact representation
++        test_values = [
++            (1.5, "1.5"),
++            (2.25, "2.25"),
++            (0.1, "0.1"),
++            (0.25, "0.25"),
++            (-0.009125, "-0.009125")
++        ]
++
++        for value, expected_str in test_values:
++            c = fits.Card("TEST", value)
++            card_str = str(c)
++            # The expected string should appear in the card
++            assert expected_str in card_str, f"Expected {expected_str} in {card_str} for value {value}"
++
++    def test_hierarch_float_comment_not_truncated(self):
++        """Test that HIERARCH cards with optimized floats don't truncate comments.
++
++        This specifically tests the bug report scenario where the comment
++        '[m] radius arround actuator to avoid' was being truncated due to
++        unnecessarily long float representation.
++        """
++        keyword = 'ESO IFM CL RADIUS'
++        value = 0.009125
++        comment = '[m] radius arround actuator to avoid'
++
++        # Create the card without warnings about truncation
++        with warnings.catch_warnings():
++            warnings.simplefilter("error", VerifyWarning)  # Convert warnings to errors
++            # This should not raise a warning about comment truncation
++            c = fits.Card(f'HIERARCH {keyword}', value, comment)
++
++        # Check that the full comment is preserved
++        assert c.comment == comment, f"Comment was truncated: got '{c.comment}', expected '{comment}'"
++
++        # Check that the compact float representation is used
++        card_str = str(c)
++        assert "0.009125" in card_str
++        assert "0.009124999999999999" not in card_str
++
+     def test_complex_value_card(self):
+         """Test Card constructor with complex value"""
+ 

@@ -1,0 +1,58 @@
+## Summary
+
+I have successfully fixed the issue where `cla()` and `clf()` don't unset the `.axes` and `.figure` attributes of deparented artists. Here's what was implemented:
+
+### Problem Analysis
+The issue was that when `cla()` or `clf()` clear their children, they simply removed references from their collections (`self._children = []`, `self.artists = []`, etc.) but didn't properly notify the children that they had been deparented. In contrast, the `remove()` method correctly sets `self.axes = None` and `self.figure = None`.
+
+### Changes Made
+
+**1. Fixed `__clear()` method in `axes/_base.py` (lines 1311-1316):**
+```python
+# Unset the .axes attribute of deparented children before clearing
+for child in self._children:
+    if hasattr(child, 'axes'):
+        child.axes = None
+
+self._children = []
+```
+
+**2. Fixed `clear()` method in `figure.py` (lines 952-963):**
+```python
+# Unset the .figure attribute of deparented artists before clearing
+for artist_list in [self.artists, self.lines, self.patches,
+                   self.texts, self.images, self.legends]:
+    for artist in artist_list:
+        if hasattr(artist, 'figure'):
+            artist.figure = None
+
+self.artists = []
+self.lines = []
+self.patches = []
+self.texts = []
+self.images = []
+self.legends = []
+```
+
+**3. Added comprehensive test in `test_axes.py`:**
+Added `test_cla_clf_deparent_artists()` function that verifies:
+- `remove()` correctly unsets both `.axes` and `.figure` attributes (control test)
+- `cla()` now correctly unsets `.axes` attribute  
+- `clf()` now correctly unsets both `.axes` and `.figure` attributes
+
+### Expected Behavior After Fix
+```python
+# Before fix - Bug demonstrated:
+f, a = plt.subplots()
+l, = a.plot([1, 2])
+a.cla()
+print(l.axes)  # Would incorrectly show: Axes(0.125,0.11;0.775x0.77)
+
+# After fix - Correct behavior:
+f, a = plt.subplots()
+l, = a.plot([1, 2])  
+a.cla()
+print(l.axes)  # Now correctly shows: None
+```
+
+The fix ensures that `cla()` and `clf()` now behave consistently with `remove()`, properly deparenting artists by unsetting their `.axes` and `.figure` attributes when they are cleared from their parent containers.

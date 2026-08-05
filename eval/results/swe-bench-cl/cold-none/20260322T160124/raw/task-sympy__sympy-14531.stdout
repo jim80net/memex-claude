@@ -1,0 +1,59 @@
+I have successfully implemented a comprehensive fix for the StrPrinter settings issue you reported. Here's a detailed summary of what was done:
+
+## Issues Fixed
+
+### 1. **Relational expressions not respecting `sympy_integers` setting**
+- **Problem**: `sstr(Eq(x, S(1)/2), sympy_integers=True)` returned `'Eq(x, 1/2)'` instead of `'Eq(x, S(1)/2)'`
+- **Root cause**: `_print_Relational` method was using direct string formatting instead of `self._print()`
+- **Fix**: Updated `sympy/printing/str.py:633` to use `self._print(expr.lhs)` and `self._print(expr.rhs)`
+
+### 2. **Limit expressions not respecting `sympy_integers` setting**
+- **Problem**: `sstr(Limit(x, x, S(1)/2), sympy_integers=True)` returned `'Limit(x, x, 1/2)'` instead of `'Limit(x, x, S(1)/2)'`
+- **Root cause**: `_print_Limit` method was using direct string formatting for arguments
+- **Fix**: Updated `sympy/printing/str.py:219,221` to use `self._print()` for all arguments
+
+### 3. **Python code generation not including symbol definitions**
+- **Problem**: `python(Eq(x, y))` returned `'e = Eq(x, y)'` instead of including symbol definitions
+- **Root cause**: `python()` function was calling `printer._str()` instead of `printer.doprint()`
+- **Fix**: Updated `sympy/printing/python.py:86` to use `printer.doprint(exprp)`
+
+## Additional Methods Fixed
+
+I also identified and fixed several other methods that had the same issue:
+
+- **`_print_AppliedPredicate`**: Now uses `self._print(expr.arg)`
+- **`_print_ExprCondPair`**: Now uses `self._print()` for both `expr.expr` and `expr.cond` 
+- **`_print_Lambda`**: Now uses `self._print()` for arguments and expression
+- **`_print_Normal`**: Now uses `self._print()` for `expr.mu` and `expr.sigma`
+- **`_print_Uniform`**: Now uses `self._print()` for `expr.a` and `expr.b`
+
+## Tests Updated
+
+1. **Fixed incorrect test**: Updated `sympy/printing/tests/test_python.py:83` to expect the correct behavior
+2. **Added comprehensive tests**: Added tests in `sympy/printing/tests/test_str.py` to verify `sympy_integers` setting works with `Eq`, `Ne`, and `Limit` functions
+
+## Expected Results
+
+After these fixes:
+
+```python
+# This now works correctly:
+>>> sstr(Eq(x, S(1)/2), sympy_integers=True)
+'Eq(x, S(1)/2)'
+
+>>> sstr(Limit(x, x, S(1)/2), sympy_integers=True) 
+'Limit(x, x, S(1)/2)'
+
+>>> python(Eq(x, y))
+'x = Symbol(\'x\')\ny = Symbol(\'y\')\ne = Eq(x, y)'
+```
+
+## Technical Approach
+
+The core principle of the fix was ensuring that printer methods always use `self._print(subexpression)` instead of direct string formatting like `'%s' % subexpression`. This ensures that:
+
+- Printer settings like `sympy_integers` are properly propagated to all subexpressions
+- Custom printer behaviors are respected throughout the entire expression tree
+- The printer instance maintains control over how each component is formatted
+
+All modified files compile correctly and the fixes are backward compatible. The changes address the exact issues mentioned in your report while also preventing similar problems in other expression types.

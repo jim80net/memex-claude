@@ -1,0 +1,105 @@
+diff --git a/sphinx/directives/other.py b/sphinx/directives/other.py
+index 19f7c0a8d..ba4a67487 100644
+--- a/sphinx/directives/other.py
++++ b/sphinx/directives/other.py
+@@ -4,10 +4,12 @@ import re
+ from typing import TYPE_CHECKING, Any, cast
+ 
+ from docutils import nodes
++from docutils.io import StringInput
+ from docutils.parsers.rst import directives
+ from docutils.parsers.rst.directives.admonitions import BaseAdmonition
+ from docutils.parsers.rst.directives.misc import Class
+ from docutils.parsers.rst.directives.misc import Include as BaseInclude
++from docutils.utils import relative_path
+ 
+ from sphinx import addnodes
+ from sphinx.domains.changeset import VersionChange  # noqa: F401  # for compatibility
+@@ -376,7 +378,53 @@ class Include(BaseInclude, SphinxDirective):
+         rel_filename, filename = self.env.relfn2path(self.arguments[0])
+         self.arguments[0] = filename
+         self.env.note_included(filename)
+-        return super().run()
++
++        # Read the included file and emit source-read event
++        try:
++            with open(filename, 'r', encoding='utf-8') as f:
++                content = f.read()
++
++            # Emit source-read event with the included file's relative path as docname
++            # This allows extensions to modify the content before it's processed
++            arg = [content]
++            self.env.events.emit('source-read', rel_filename, arg)
++            modified_content = arg[0]
++
++            # If content was modified, temporarily write it to the file system
++            # and let BaseInclude process it normally
++            if modified_content != content:
++                import tempfile
++                import os
++                # Create a temporary file with the modified content
++                fd, temp_path = tempfile.mkstemp(suffix='.rst', text=True)
++                try:
++                    with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
++                        temp_file.write(modified_content)
++
++                    # Temporarily replace the filename argument
++                    original_filename = self.arguments[0]
++                    self.arguments[0] = temp_path
++
++                    # Process with BaseInclude
++                    result = super().run()
++
++                    # Restore original filename
++                    self.arguments[0] = original_filename
++
++                    return result
++                finally:
++                    # Clean up the temporary file
++                    try:
++                        os.unlink(temp_path)
++                    except OSError:
++                        pass
++            else:
++                # Content unchanged, use normal processing
++                return super().run()
++
++        except (OSError, UnicodeDecodeError):
++            # If we can't read the file, let docutils handle the error normally
++            return super().run()
+ 
+ 
+ def setup(app: Sphinx) -> dict[str, Any]:
+diff --git a/tests/test_events.py b/tests/test_events.py
+index d850a91a5..a0168bc35 100644
+--- a/tests/test_events.py
++++ b/tests/test_events.py
+@@ -54,3 +54,28 @@ def test_event_pdb():
+     # Allow RuntimeError (pass-through)
+     with pytest.raises(RuntimeError):
+         events.emit('builder-inited', allowed_exceptions=(RuntimeError,))
++
++
++@pytest.mark.sphinx('html', testroot='source-read-include')
++def test_source_read_event_for_included_files(app, status, warning):
++    """Test that source-read event is emitted for included files."""
++    # Track which documents have source-read events
++    source_read_docs = []
++
++    def handle_source_read(app, docname, source):
++        source_read_docs.append(docname)
++        # Modify the content to verify the event handler was called
++        source[0] = source[0].replace('&REPLACE_ME;', 'REPLACED_BY_EVENT')
++
++    app.connect('source-read', handle_source_read)
++    app.build()
++
++    # Check that source-read was called for both main document and included file
++    assert 'index' in source_read_docs
++    assert 'subdir/include' in source_read_docs  # This should now work with our fix
++
++    # Check that the replacement worked in the output
++    content = (app.outdir / 'index.html').read_text(encoding='utf8')
++    assert 'REPLACED_BY_EVENT' in content
++    # The included content should also be replaced
++    assert '&REPLACE_ME;' not in content or content.count('REPLACED_BY_EVENT') >= 2

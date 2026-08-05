@@ -1,0 +1,34 @@
+Perfect! The fix has been successfully implemented. Here's a summary of what was accomplished:
+
+## ✅ Bug Fix Summary
+
+### **Problem Identified**
+- `xr.where(..., keep_attrs=True)` was overwriting coordinate attributes with main variable attributes
+- Issue was in `xarray/core/computation.py` lines 1860-1863  
+- The lambda function `lambda attrs, context: getattr(x, "attrs", {})` always returned main variable's attributes
+
+### **Root Cause**
+```python
+# BEFORE (problematic):
+keep_attrs = lambda attrs, context: getattr(x, "attrs", {})
+```
+This ignored the original `attrs` parameter and always used the main variable's attributes for ALL variables including coordinates.
+
+### **Solution Implemented**  
+```python
+# AFTER (fixed):
+keep_attrs = lambda attrs, context: attrs
+```
+Now each variable (coordinates and main variable) preserves its own original attributes.
+
+### **Fix Verification**
+✅ **Test confirmed the fix works correctly:**
+- **Old behavior**: Coordinate attributes `{'standard_name': 'time', 'units': 'days'}` → overwritten with `{'main_var': 'value', 'units': 'kg'}`
+- **New behavior**: Coordinate attributes `{'standard_name': 'time', 'units': 'days'}` → preserved correctly
+
+### **Expected Behavior After Fix**
+- ✅ **Coordinates**: Keep their own attributes (e.g., time coordinates keep `{'standard_name': 'time', 'long_name': 'Time'}`)
+- ✅ **Main variable**: Keeps its own attributes (which come from `x` parameter)
+- ✅ **Consistent**: Matches behavior of DataArray/Dataset `.where()` methods
+
+This fix resolves the issue reported where `xr.where(True, ds.air, ds.air, keep_attrs=True).time.attrs` was incorrectly returning air temperature attributes instead of the original time coordinate attributes.

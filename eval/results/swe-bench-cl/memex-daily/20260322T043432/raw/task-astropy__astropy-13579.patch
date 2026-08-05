@@ -1,0 +1,99 @@
+diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b078c..ce7e49e1d3 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -244,6 +244,11 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+ 
+     def world_to_pixel_values(self, *world_arrays):
+         world_arrays = tuple(map(np.asanyarray, world_arrays))
++
++        # Get the world coordinates at the sliced pixel location for dropped dimensions
++        # We use zeros as dummy pixel coordinates for the kept dimensions
++        dropped_world_coords = self._pixel_to_world_values_all(*[0]*len(self._pixel_keep))
++
+         world_arrays_new = []
+         iworld_curr = -1
+         for iworld in range(self._wcs.world_n_dim):
+@@ -251,7 +256,8 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+                 iworld_curr += 1
+                 world_arrays_new.append(world_arrays[iworld_curr])
+             else:
+-                world_arrays_new.append(1.)
++                # Use the actual world coordinate at the sliced location
++                world_arrays_new.append(dropped_world_coords[iworld])
+ 
+         world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
+diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
+index a354114962..c69beee4b2 100644
+--- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
+@@ -899,3 +899,68 @@ def test_pixel_to_world_values_different_int_types():
+     for int_coord, np64_coord in zip(int_sliced.pixel_to_world_values(*pixel_arrays),
+                                      np64_sliced.pixel_to_world_values(*pixel_arrays)):
+         assert all(int_coord == np64_coord)
++
++
++def test_sliced_world_to_pixel_coupled_dimensions():
++    """
++    Test that SlicedLowLevelWCS.world_to_pixel_values works correctly
++    when there are coupled dimensions in the WCS transformation.
++
++    This reproduces the issue from GitHub issue #XXXXX where world_to_pixel
++    was returning incorrect results for sliced WCS with coupled PC matrix.
++    """
++    # Create a WCS with coupled transformations similar to the issue report
++    wcs_header = {
++        'WCSAXES': 3,
++        'CRPIX1': 50.5,
++        'CRPIX2': 12.5,
++        'CRPIX3': 1.0,
++        'PC1_1': 0.0,      # PC matrix with coupling
++        'PC1_2': -1.0,
++        'PC1_3': 0.0,
++        'PC2_1': 1.0,
++        'PC2_2': 0.0,
++        'PC2_3': -1.0,     # Couples spectral and spatial
++        'CDELT1': 5,
++        'CDELT2': 5,
++        'CDELT3': 0.055,
++        'CUNIT1': 'arcsec',
++        'CUNIT2': 'arcsec',
++        'CUNIT3': 'Angstrom',
++        'CTYPE1': 'HPLN-TAN',
++        'CTYPE2': 'HPLT-TAN',
++        'CTYPE3': 'WAVE',
++        'CRVAL1': 0.0,
++        'CRVAL2': 0.0,
++        'CRVAL3': 1.05,
++    }
++
++    from astropy.wcs import WCS
++    from astropy.wcs.wcsapi.wrappers.sliced_wcs import SlicedLowLevelWCS
++
++    fits_wcs = WCS(header=wcs_header)
++
++    # Test world_to_pixel on the full WCS at the reference point
++    world_values = [0.0, 0.0, 1.05]  # Tx=0, Ty=0, wavelength=1.05 Angstrom
++    px, py, pz = fits_wcs.world_to_pixel_values(*world_values)
++
++    # Create a sliced WCS that removes the spectral dimension (index 0)
++    sliced_wcs = SlicedLowLevelWCS(fits_wcs, 0)
++
++    # Test world_to_pixel on sliced WCS with just the spatial coordinates
++    spatial_world_values = [0.0, 0.0]  # Tx=0, Ty=0
++    sliced_px, sliced_py = sliced_wcs.world_to_pixel_values(*spatial_world_values)
++
++    # The spatial pixel coordinates should match
++    # (allowing for small numerical differences)
++    assert_allclose(sliced_px, px, rtol=1e-10, atol=1e-10,
++                   err_msg="X pixel coordinate doesn't match between full and sliced WCS")
++    assert_allclose(sliced_py, py, rtol=1e-10, atol=1e-10,
++                   err_msg="Y pixel coordinate doesn't match between full and sliced WCS")
++
++    # Test round-trip: pixel_to_world should give back the original coordinates
++    world_roundtrip = sliced_wcs.pixel_to_world_values(sliced_px, sliced_py)
++    assert_allclose(world_roundtrip[0], 0.0, rtol=1e-10, atol=1e-10,
++                   err_msg="Round-trip failed for X coordinate")
++    assert_allclose(world_roundtrip[1], 0.0, rtol=1e-10, atol=1e-10,
++                   err_msg="Round-trip failed for Y coordinate")

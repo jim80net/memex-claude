@@ -1,0 +1,34 @@
+## Fix Summary
+
+I've successfully fixed the inheritance diagram SVG link issue! Here's what was done:
+
+### **Problem**
+The `sphinx.ext.inheritance_diagram` extension generated incorrect relative links in SVG files when the SVG was embedded in pages located in subdirectories. The code was hard-coding `"../"` prefixes instead of calculating proper relative paths.
+
+### **Root Cause**
+In `/eval/workdir/sphinx-doc_sphinx/sphinx/ext/inheritance_diagram.py`, lines 415-423, the code always prefixed SVG URLs with `"../"` without considering the actual relative path needed:
+
+```python
+# OLD (broken) code:
+if graphviz_output_format == 'SVG':
+    urls[child['reftitle']] = "../" + child.get('refuri')
+```
+
+### **Solution**
+1. **Added import**: Imported `relative_uri` from `sphinx.util.osutil` 
+2. **Fixed URL generation**: Replaced hard-coded `"../"` with proper relative path calculation using `relative_uri()` function
+
+```python
+# NEW (fixed) code:
+if graphviz_output_format == 'SVG':
+    urls[child['reftitle']] = relative_uri(current_filename, child.get('refuri'))
+```
+
+### **Verification**
+Created and ran tests that confirm:
+- **Root page → nested target**: `my_package/my_class_1.html` ✓
+- **Nested page → same dir target**: `my_class_1.html` (was `../my_class_1.html`) ✓ **This fixes the 404!**
+- **Nested page → different dir**: `../other_package/other_class.html` ✓
+- **Deep nested → root**: `../../../target.html` (was `../target.html`) ✓
+
+The fix ensures that SVG inheritance diagrams will have correctly functioning links regardless of where the page containing the diagram is located in the directory structure.

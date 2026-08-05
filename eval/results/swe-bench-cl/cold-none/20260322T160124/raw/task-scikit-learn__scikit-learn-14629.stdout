@@ -1,0 +1,52 @@
+## Summary
+
+I've successfully fixed the AttributeError with `cross_val_predict(method='predict_proba')` when using `MultiOutputClassifier`. Here's what I implemented:
+
+### 🔧 **The Fix**
+
+**Problem**: `MultiOutputClassifier` doesn't have a `classes_` attribute, but the code in `_fit_and_predict()` assumed all estimators do.
+
+**Solution**: 
+1. **Added helper function** `_get_estimator_classes()` that handles different estimator types:
+   - **Regular classifiers**: Uses `estimator.classes_`
+   - **ClassifierChain**: Uses `estimator.classes_[i_label]` 
+   - **MultiOutputClassifier**: Uses `estimator.estimators_[i_label].classes_`
+
+2. **Updated the problematic code** in `_fit_and_predict()`:
+   - Line 892: `estimator.classes_[i_label]` → `_get_estimator_classes(estimator, i_label)`
+   - Line 899: `estimator.classes_` → `_get_estimator_classes(estimator)`
+
+### 📁 **Files Modified**
+
+1. **`sklearn/model_selection/_validation.py`**
+   - Added `_get_estimator_classes()` helper function
+   - Updated `_fit_and_predict()` to use the helper
+
+2. **`sklearn/model_selection/tests/test_validation.py`**
+   - Added imports for `MultiOutputClassifier` and `LinearDiscriminantAnalysis`
+   - Added comprehensive test `test_cross_val_predict_multioutput_classifier()`
+
+### ✅ **Testing & Verification**
+
+- ✅ Helper function tested with all estimator types
+- ✅ Maintains backward compatibility 
+- ✅ Handles the original bug report scenario
+- ✅ Added comprehensive unit tests
+
+### 🎯 **Result** 
+
+The original code that failed:
+```python
+from sklearn.datasets import make_multilabel_classification
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.model_selection import cross_val_predict
+
+X, Y = make_multilabel_classification()
+mo_lda = MultiOutputClassifier(LinearDiscriminantAnalysis())
+pred_proba = cross_val_predict(mo_lda, X, Y, cv=5, method='predict_proba')  # Now works!
+```
+
+**Now works perfectly!** 🎉
+
+The fix is elegant, minimal, and maintains full backward compatibility while resolving the specific issue with `MultiOutputClassifier`.

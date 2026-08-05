@@ -1,0 +1,86 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1f4c98284..d02a589e6 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1457,6 +1457,9 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # type:
+     @classmethod
+     def can_document_member(cls, member: Any, membername: str, isattr: bool, parent: Any
+                             ) -> bool:
++        # Generic aliases should be documented as data, not classes
++        if inspect.isgenericalias(member):
++            return False
+         return isinstance(member, type)
+ 
+     def import_object(self, raiseerror: bool = False) -> bool:
+diff --git a/tests/test_ext_autodoc_autodata.py b/tests/test_ext_autodoc_autodata.py
+index d01e45fc1..9727bb0a0 100644
+--- a/tests/test_ext_autodoc_autodata.py
++++ b/tests/test_ext_autodoc_autodata.py
+@@ -155,3 +155,67 @@ def test_autodata_hide_value(app):
+         '   :meta hide-value:',
+         '',
+     ]
++
++
++@pytest.mark.skipif(sys.version_info < (3, 7), reason='python 3.7+ is required for GenericAlias.')
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_autodata_type_alias_multiline_docstring(app):
++    """Test that multiline docstrings work correctly for type aliases (issue #XXXX)."""
++    # Test ScaffoldOpts - a Dict type alias with multiline docstring
++    actual = do_autodoc(app, 'data', 'target.test_type_alias_docstrings.ScaffoldOpts')
++    assert list(actual) == [
++        '',
++        '.. py:data:: ScaffoldOpts',
++        '   :module: target.test_type_alias_docstrings',
++        '',
++        '   Dictionary with PyScaffold\'s options.',
++        '   Should be treated as immutable (if required, copy before changing).',
++        '',
++        '   Please notice some behaviours given by the options **SHOULD** be observed.',
++        '',
++        '   alias of :class:`~typing.Dict`\\ [:class:`str`, :class:`~typing.Any`]',
++        '',
++    ]
++
++
++@pytest.mark.skipif(sys.version_info < (3, 7), reason='python 3.7+ is required for GenericAlias.')
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_autodata_type_alias_union_multiline_docstring(app):
++    """Test that multiline docstrings work correctly for Union type aliases."""
++    # Test FileContents - a Union type alias with multiline docstring
++    actual = do_autodoc(app, 'data', 'target.test_type_alias_docstrings.FileContents')
++    assert list(actual) == [
++        '',
++        '.. py:data:: FileContents',
++        '   :module: target.test_type_alias_docstrings',
++        '',
++        '   When the file content is ``None``, the file should not be written to',
++        '   disk (empty files are represented by an empty string ``""`` as content).',
++        '',
++        '   alias of :obj:`~typing.Optional`\\ [:class:`str`]',
++        '',
++    ]
++
++
++@pytest.mark.skipif(sys.version_info < (3, 7), reason='python 3.7+ is required for GenericAlias.')
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_autodata_type_alias_callable_multiline_docstring(app):
++    """Test that multiline docstrings work correctly for Callable type aliases."""
++    # Test FileOp - a Callable type alias with multiline docstring
++    actual = do_autodoc(app, 'data', 'target.test_type_alias_docstrings.FileOp')
++    assert list(actual) == [
++        '',
++        '.. py:data:: FileOp',
++        '   :module: target.test_type_alias_docstrings',
++        '',
++        '   Signature of functions considered file operations.',
++        '',
++        '   - **path**: file path potentially to be written to/changed in the disk.',
++        '   - **contents**: usually a string content. None indicates file not written.',
++        '   - **opts**: a dict with PyScaffold\'s options.',
++        '',
++        '   If the file is written, by convention they should return the file path.',
++        '',
++        '   alias of :class:`~typing.Callable`\\ [[:class:`~pathlib.Path`, :obj:`~typing.Optional`\\ [:class:`str`], :class:`~typing.Dict`\\ [:class:`str`, :class:`~typing.Any`]], :obj:`~typing.Optional`\\ [:class:`~pathlib.Path`]]',
++        '',
++    ]

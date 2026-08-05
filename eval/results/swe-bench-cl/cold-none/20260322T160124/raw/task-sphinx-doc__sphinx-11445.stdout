@@ -1,0 +1,67 @@
+## Summary
+
+I've successfully identified and fixed the bug with `rst_prolog` removing top level headings containing domain directives. Here's what I found and fixed:
+
+### Root Cause
+
+The issue was in `/sphinx/util/rst.py` at line 28. The regex pattern used to identify docinfo fields was too broad:
+
+```python
+docinfo_re = re.compile(':\\w+:.*?')
+```
+
+This pattern matched both:
+- **Real docinfo fields**: `:title: Document Title`, `:author: John Doe`  
+- **Domain role references**: `:mod:`mypackage2``, `:class:`MyClass``
+
+When `rst_prolog` was set, the `prepend_prolog` function would incorrectly treat domain role references like `:mod:`mypackage2`` as docinfo fields and insert the prolog content after them, breaking the heading structure.
+
+### The Fix
+
+I updated the regex to be more specific in `/sphinx/util/rst.py:28`:
+
+```python
+# Before (problematic)
+docinfo_re = re.compile(':\\w+:.*?')
+
+# After (fixed)
+docinfo_re = re.compile(r':\w+:\s+.*')
+```
+
+The key difference is requiring a **space after the second colon** (`\s+`). Real docinfo fields have this format: `:field: value` while domain role references don't: `:role:`target``.
+
+### Verification
+
+The fix correctly handles:
+
+**✅ Domain role references (no longer treated as docinfo):**
+- `:mod:`mypackage2`` → NOT DOCINFO
+- `:class:`MyClass`` → NOT DOCINFO  
+
+**✅ Real docinfo fields (still treated as docinfo):**  
+- `:title: Document Title` → DOCINFO
+- `:author: John Doe` → DOCINFO
+- `:date: 2023-01-01` → DOCINFO
+
+### Added Test Case
+
+I also added a test case in `/tests/test_util_rst.py` that specifically validates this scenario:
+
+```python
+def test_prepend_prolog_with_domain_directive_in_heading(app):
+    # Test case for issue with domain directives in headings
+    # When rst_prolog is set, domain directives like :mod:`package` in headings
+    # should not be treated as docinfo fields
+```
+
+This ensures the bug doesn't regress in future versions.
+
+### Impact
+
+The fix resolves the reported issue where headings containing domain directives (like `:mod:`mypackage2``) would disappear from toctrees and render incorrectly when `rst_prolog` was configured. Now:
+
+1. **Domain directives in headings** work correctly with `rst_prolog`
+2. **Existing docinfo functionality** remains unchanged  
+3. **No breaking changes** to the API
+
+The bug was present since v4.0.0 as reported, and this fix should resolve it completely.

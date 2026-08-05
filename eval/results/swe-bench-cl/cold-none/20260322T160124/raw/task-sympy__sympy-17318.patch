@@ -1,0 +1,31 @@
+diff --git a/sympy/simplify/radsimp.py b/sympy/simplify/radsimp.py
+index 216ae26204..de59422669 100644
+--- a/sympy/simplify/radsimp.py
++++ b/sympy/simplify/radsimp.py
+@@ -1113,6 +1113,8 @@ def _split_gcd(*a):
+     >>> _split_gcd(55, 35, 22, 14, 77, 10)
+     (5, [55, 35, 10], [22, 14, 77])
+     """
++    if not a:
++        return 1, [], []
+     g = a[0]
+     b1 = [g]
+     b2 = []
+diff --git a/sympy/simplify/tests/test_sqrtdenest.py b/sympy/simplify/tests/test_sqrtdenest.py
+index c30f7a3235..31352ba3fa 100644
+--- a/sympy/simplify/tests/test_sqrtdenest.py
++++ b/sympy/simplify/tests/test_sqrtdenest.py
+@@ -183,3 +183,13 @@ def test_issue_5653():
+ 
+ def test_sqrt_ratcomb():
+     assert sqrtdenest(sqrt(1 + r3) + sqrt(3 + 3*r3) - sqrt(10 + 6*r3)) == 0
++
++
++def test_issue_12420():
++    # Test for IndexError fix when expression cannot be denested
++    from sympy import I
++    expr = (3 - sqrt(2)*sqrt(4 + 3*I) + 3*I)/2
++    # Should not raise IndexError, should return expression unchanged
++    result = sqrtdenest(expr)
++    # The result should be the original expression since it cannot be denested
++    assert result == expr

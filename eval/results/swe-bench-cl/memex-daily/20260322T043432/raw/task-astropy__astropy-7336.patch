@@ -1,0 +1,53 @@
+diff --git a/astropy/units/decorators.py b/astropy/units/decorators.py
+index 8bece5a850..4ee9e7f94c 100644
+--- a/astropy/units/decorators.py
++++ b/astropy/units/decorators.py
+@@ -221,6 +221,9 @@ class QuantityInput:
+             with add_enabled_equivalencies(self.equivalencies):
+                 return_ = wrapped_function(*func_args, **func_kwargs)
+             if wrapped_signature.return_annotation is not inspect.Signature.empty:
++                # Handle the case where return annotation is None (common for constructors)
++                if wrapped_signature.return_annotation is None or wrapped_signature.return_annotation is type(None):
++                    return return_
+                 return return_.to(wrapped_signature.return_annotation)
+             else:
+                 return return_
+diff --git a/astropy/units/tests/py3_test_quantity_annotations.py b/astropy/units/tests/py3_test_quantity_annotations.py
+index 4956b0ec19..ad6bb43ed3 100644
+--- a/astropy/units/tests/py3_test_quantity_annotations.py
++++ b/astropy/units/tests/py3_test_quantity_annotations.py
+@@ -285,3 +285,34 @@ def test_return_annotation():
+     assert solarx.unit is u.deg
+     """
+     return src
++
++
++@py3only
++def test_constructor_none_return_annotation():
++    src = """
++    class TestClass:
++        @u.quantity_input
++        def __init__(self, voltage: u.V) -> None:
++            self.voltage = voltage
++
++    # This should work without throwing an AttributeError
++    test_obj = TestClass(1.0 * u.V)
++    assert test_obj.voltage.unit is u.V
++    assert test_obj.voltage.value == 1.0
++    """
++    return src
++
++
++@py3only
++def test_function_none_return_annotation():
++    src = """
++    @u.quantity_input
++    def set_voltage(voltage: u.V) -> None:
++        # Function that doesn't return anything
++        pass
++
++    # This should work without throwing an AttributeError
++    result = set_voltage(1.0 * u.V)
++    assert result is None
++    """
++    return src

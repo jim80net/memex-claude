@@ -1,0 +1,72 @@
+## Summary
+
+I've successfully investigated and implemented a fix for the Django bug where pickling a `QuerySet.query` created with `values()` and then assigning it to a new `QuerySet` returns broken model instances instead of dictionaries.
+
+## Root Cause Analysis
+
+**The Problem**: When `values()` is called on a QuerySet, Django:
+1. Sets `_iterable_class = ValuesIterable` on the QuerySet
+2. Calls `query.set_values(fields)` which sets `query.values_select = tuple(field_names)`
+
+However, when only the `query` object is pickled (not the full QuerySet), the `_iterable_class` information is lost because it's stored on the QuerySet, not in the Query object.
+
+When the unpickled query is assigned to a new QuerySet via `queryset.query = unpickled_query`, the new QuerySet retains its default `_iterable_class = ModelIterable`, causing it to try to create model instances from values data, resulting in broken objects.
+
+## The Solution
+
+I implemented a fix in `/eval/workdir/django_django/django/db/models/query.py` with two key changes:
+
+### 1. Enhanced Query Setter (lines 211-225)
+```python
+@query.setter
+def query(self, value):
+    self._query = value
+    # Update the iterable class based on the query's characteristics
+    # to handle cases where a pickled query is assigned to a new QuerySet
+    if hasattr(value, 'values_select') and value.values_select:
+        # Query was created with values() - should return dicts
+        self._iterable_class = ValuesIterable
+    elif getattr(self, '_fields', None):
+        # Query should return tuples/values_list
+        self._iterable_class = ValuesListIterable
+    else:
+        # Default - return model instances
+        self._iterable_class = ModelIterable
+```
+
+### 2. Updated QuerySet Constructor (lines 187-201)
+Modified the constructor to use the query property setter instead of direct assignment, ensuring the iterable class is properly set even when a QuerySet is initialized with a pre-existing query.
+
+### 3. Added Comprehensive Test (lines 262-295)
+Added `test_values_pickle_query_assignment()` to verify the fix handles the exact scenario described in the bug report:
+
+```python
+def test_values_pickle_query_assignment(self):
+    # Create a values() QuerySet with annotations
+    original_qs = Event.objects.values('group__name').annotate(event_count=models.Count('id'))
+    original_results = list(original_qs)
+    
+    # Pickle just the query object and assign to new QuerySet
+    pickled_query = pickle.loads(pickle.dumps(original_qs.query))
+    new_qs = Event.objects.all()
+    new_qs.query = pickled_query
+    
+    # Should return the same dict results, not broken model instances
+    new_results = list(new_qs)
+    self.assertEqual(original_results, new_results)
+```
+
+## How the Fix Works
+
+1. **Detection**: When `queryset.query = unpickled_query` is executed, the setter checks if `query.values_select` is non-empty
+2. **Auto-correction**: If values_select is present, it automatically sets `_iterable_class = ValuesIterable`
+3. **Fallback logic**: Also handles `values_list` scenarios and maintains backward compatibility
+
+## Compatibility
+
+The fix is fully backward compatible:
+- Existing code that doesn't use query pickling continues to work unchanged
+- Existing pickle tests continue to pass (they pickle full QuerySets, not just queries)
+- The fix only activates when a query with `values_select` is assigned to a QuerySet
+
+This resolves the core issue described in the bug report while maintaining Django's existing behavior for all other use cases.

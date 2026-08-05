@@ -1,0 +1,34 @@
+## Summary
+
+I've successfully identified and fixed the inconsistency in double single-quote ('') management in FITS Card parsing. Here's what was accomplished:
+
+### **Root Cause Analysis**
+The issue occurred when strings containing double single-quotes at the end get split across CONTINUE cards during long string handling. When the escaped sequence `''''` (which represents `''`) gets split as `'''` + `'`, the original parsing logic would unescape each part independently:
+- `'''` → `''` (correct)
+- `'` → `'` (incorrect, should be part of the escaped sequence)
+- Combined result: `'''` instead of the expected `''`
+
+### **The Fix**
+**File:** `astropy/io/fits/card.py` (lines ~861-874)
+
+**Problem:** Each CONTINUE card was being unescaped independently before concatenation.
+
+**Solution:** Changed the parsing logic to:
+1. Collect all raw string values first (without unescaping)
+2. Concatenate all the raw values 
+3. Then perform unescaping on the complete concatenated string
+
+This ensures that split escaped sequences like `'''` + `'` are properly handled as `''''` → `''`.
+
+### **Testing**
+- **Added comprehensive regression tests** in `test_header.py` that verify the fix works for:
+  - Strings with double quotes at the end (the reported failing cases)
+  - Strings with double quotes in the middle
+  - Various string lengths that trigger different split patterns
+
+- **Verified the fix** resolves the specific failing cases (n=64, n=66) while maintaining compatibility with all existing functionality.
+
+### **Impact**
+The fix is minimal, targeted, and maintains full backward compatibility. It only affects the parsing of CONTINUE cards where escaped quote sequences were previously handled incorrectly when split across card boundaries.
+
+The regression test ensures this issue won't reoccur and provides clear documentation of the expected behavior for future maintainers.

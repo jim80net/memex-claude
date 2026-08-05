@@ -1,0 +1,51 @@
+I've successfully identified and fixed the regression in pytest 5.2.3. Here's a comprehensive analysis:
+
+## Root Cause Analysis
+
+The regression was introduced in commit `9275012ef` (fix bug with nonskipped first test in package) which aimed to fix issue #5830. The problem is in the `Package.collect()` method in `/src/_pytest/python.py`:
+
+**Before 5.2.3 (working correctly):**
+- All `__init__.py` files were collected as Package objects
+- Only `__init__.py` files matching `python_files` patterns were imported and yielded as Modules
+
+**In 5.2.3 (broken):**
+- All `__init__.py` files were collected as Package objects  
+- `Package.collect()` called `self._mount_obj_if_needed()` at the beginning
+- This triggered import of ALL `__init__.py` files via `_getobj()` → `_importtestmodule()` → `pyimport()`
+- Files were imported regardless of whether they matched `python_files` patterns
+
+## The Fix
+
+I moved the `self._mount_obj_if_needed()` call inside the conditional block that checks if the `__init__.py` file should be collected:
+
+```python
+# Before (causing regression):
+def collect(self):
+    self._mount_obj_if_needed()  # Always imports!
+    this_path = self.fspath.dirpath()
+    init_module = this_path.join("__init__.py")
+    if init_module.check(file=1) and path_matches_patterns(
+        init_module, self.config.getini("python_files")
+    ):
+        yield Module(init_module, self)
+
+# After (fixed):
+def collect(self):
+    this_path = self.fspath.dirpath()
+    init_module = this_path.join("__init__.py")
+    if init_module.check(file=1) and path_matches_patterns(
+        init_module, self.config.getini("python_files")
+    ):
+        self._mount_obj_if_needed()  # Only imports when needed!
+        yield Module(init_module, self)
+```
+
+## Impact of the Fix
+
+✅ **Fixes the regression:** Random `__init__.py` files (like your `foobar/__init__.py` with `assert False`) will no longer be imported during collection
+
+✅ **Preserves #5830 functionality:** When `__init__.py` files DO match `python_files` patterns, they are still properly imported and their markers processed for skip behavior
+
+✅ **Maintains backward compatibility:** The fix only changes WHEN the import happens, not WHETHER it happens for legitimate test files
+
+The fix is minimal, targeted, and preserves the intended functionality while eliminating the unwanted side effect that caused the regression.

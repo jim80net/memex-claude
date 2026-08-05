@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "sync": { "enabled": false },
+  "sleepSchedule": { "enabled": false },
+  "hooks": {
+    "UserPromptSubmit": { "enabled": true, "topK": 3, "threshold": 0.5, "maxInjectedChars": 8000 },
+    "PreToolUse": { "enabled": false },
+    "Stop": { "enabled": true, "extractLearnings": true, "behavioralRules": true },
+    "PreCompact": { "enabled": false }
+  }
+}

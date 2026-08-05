@@ -1,0 +1,61 @@
+## Summary
+
+I have successfully fixed the Django `add` template filter issue where it couldn't concatenate strings with lazy strings. Here's what I did:
+
+### **Problem Identified**
+The `add` template filter was returning empty strings when trying to concatenate regular strings with lazy strings (like `gettext_lazy` translation objects), causing a `TypeError: can only concatenate str (not "__proxy__") to str`.
+
+### **Root Cause** 
+Django's lazy strings are implemented as `__proxy__` objects that only evaluate to actual strings when needed. The `add` filter's direct concatenation with the `+` operator failed when one operand was a proxy object.
+
+### **Solution Implemented**
+
+1. **Added import**: Added `force_str` to the imports in `django/template/defaultfilters.py`:
+   ```python
+   from django.utils.encoding import force_str, iri_to_uri
+   ```
+
+2. **Enhanced the add function**: Modified the `add` filter to detect and handle lazy strings:
+   ```python
+   @register.filter(is_safe=False)
+   def add(value, arg):
+       """Add the arg to the value."""
+       try:
+           return int(value) + int(arg)
+       except (ValueError, TypeError):
+           try:
+               return value + arg
+           except Exception:
+               # Handle lazy strings (gettext_lazy, etc.) by forcing them to strings
+               try:
+                   # Only convert to string if either value appears to be a lazy string
+                   if hasattr(value, '__class__') and value.__class__.__name__ == '__proxy__':
+                       value = force_str(value)
+                   if hasattr(arg, '__class__') and arg.__class__.__name__ == '__proxy__':
+                       arg = force_str(arg)
+                   return value + arg
+               except Exception:
+                   return ''
+   ```
+
+3. **Added test coverage**: Enhanced the test suite with a comprehensive test for lazy string concatenation:
+   ```python
+   def test_add_lazy_strings(self):
+       """Test that add filter works with lazy strings (translation strings)."""
+       # Tests for lazy_string + regular_string, regular_string + lazy_string, 
+       # and lazy_string + lazy_string combinations
+   ```
+
+### **Key Features of the Fix**
+
+✅ **Targeted approach**: Only applies `force_str` when `__proxy__` objects are detected  
+✅ **Preserves existing behavior**: All existing functionality remains unchanged  
+✅ **Handles all combinations**: Works with lazy+regular, regular+lazy, and lazy+lazy strings  
+✅ **Maintains performance**: Minimal overhead for non-lazy string operations  
+✅ **Proper error handling**: Falls back to empty string if conversion fails  
+
+### **Files Modified**
+- `django/template/defaultfilters.py` - Added import and enhanced `add` function  
+- `tests/template_tests/filter_tests/test_add.py` - Added comprehensive test coverage
+
+The fix ensures that the `add` template filter now properly handles lazy strings while maintaining full backward compatibility with existing code.

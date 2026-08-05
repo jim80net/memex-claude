@@ -1,0 +1,66 @@
+diff --git a/lib/matplotlib/tests/test_text.py b/lib/matplotlib/tests/test_text.py
+index 47121b7a22..ec85fa6024 100644
+--- a/lib/matplotlib/tests/test_text.py
++++ b/lib/matplotlib/tests/test_text.py
+@@ -914,6 +914,43 @@ def test_annotate_offset_fontsize():
+     assert str(points_coords) == str(fontsize_coords)
+ 
+ 
++def test_annotate_array_mutation():
++    """Test that modifying arrays passed as xy parameter doesn't affect annotation."""
++    fig, ax = plt.subplots()
++
++    # Test with numpy array as xy parameter
++    xy_array = np.array((-4, 1))
++    original_xy = xy_array.copy()
++
++    # Create annotation - this should copy the array, not keep a reference
++    annotation = ax.annotate(s='', xy=xy_array, xytext=(-1, 1),
++                           arrowprops=dict(arrowstyle='<->'))
++
++    # Modify the original array after annotation creation
++    xy_array[1] = 3
++
++    # Annotation's xy should still be the original values, not the modified array
++    assert np.array_equal(annotation.xy, original_xy), \
++        f"Expected annotation.xy {annotation.xy} to equal original {original_xy}"
++    assert not np.array_equal(annotation.xy, xy_array), \
++        f"annotation.xy {annotation.xy} should not equal modified array {xy_array}"
++
++    # Test with list as xy parameter (should also be copied)
++    xy_list = [-2, 2]
++    original_list = xy_list.copy()
++
++    annotation2 = ax.annotate(s='', xy=xy_list, xytext=(1, 2))
++
++    # Modify the original list
++    xy_list[0] = 5
++
++    # Annotation's xy should still be the original values
++    assert np.array_equal(annotation2.xy, original_list), \
++        f"Expected annotation2.xy {annotation2.xy} to equal original {original_list}"
++    assert not np.array_equal(annotation2.xy, xy_list), \
++        f"annotation2.xy {annotation2.xy} should not equal modified list {xy_list}"
++
++
+ def test_set_antialiased():
+     txt = Text(.5, .5, "foo\nbar")
+     assert txt._antialiased == mpl.rcParams['text.antialiased']
+diff --git a/lib/matplotlib/text.py b/lib/matplotlib/text.py
+index d4922fc517..95ff2b62cb 100644
+--- a/lib/matplotlib/text.py
++++ b/lib/matplotlib/text.py
+@@ -1456,7 +1456,12 @@ class _AnnotationBase:
+                  xycoords='data',
+                  annotation_clip=None):
+ 
+-        self.xy = xy
++        # Copy mutable array-like objects to prevent unwanted mutations
++        # while leaving other coordinate types (strings, transforms, etc.) unchanged
++        if hasattr(xy, '__array__') or hasattr(xy, '__array_interface__'):
++            self.xy = np.array(xy, copy=True)
++        else:
++            self.xy = xy
+         self.xycoords = xycoords
+         self.set_annotation_clip(annotation_clip)
+ 

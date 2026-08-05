@@ -1,0 +1,43 @@
+Perfect! I've successfully identified and fixed the issue with `ds.Coarsen.construct` demoting non-dimensional coordinates to variables.
+
+## Summary of the Issue
+
+The problem was in the `Coarsen.construct` method in `/eval/workdir/pydata_xarray/xarray/core/rolling.py` at lines 976-977. The original code:
+
+```python
+should_be_coords = set(window_dim) & set(self.obj.coords)
+result = reshaped.set_coords(should_be_coords)
+```
+
+This only preserved coordinates that were **both** in the `window_dim` mapping (i.e., being coarsened) **and** were original coordinates. This meant that non-dimensional coordinates like `day` in your example were demoted to data variables.
+
+## The Fix
+
+I changed the logic to:
+
+```python
+# Preserve all coordinates that exist in the reshaped dataset
+# not just the ones being coarsened
+should_be_coords = set(self.obj.coords) & set(reshaped.variables)
+result = reshaped.set_coords(should_be_coords)
+```
+
+This now preserves **all** original coordinates that still exist as variables in the reshaped dataset, regardless of whether they were being coarsened or not.
+
+## Test Added
+
+I also added a comprehensive test case `test_coarsen_construct_keeps_non_dimensional_coordinates()` in `/eval/workdir/pydata_xarray/xarray/tests/test_coarsen.py` that:
+
+1. Creates the exact scenario from your bug report
+2. Verifies that non-dimensional coordinates remain as coordinates after `coarsen.construct`
+3. Ensures they don't get demoted to data variables
+
+## Validation
+
+The fix ensures that:
+- ✅ Non-dimensional coordinates like `day` remain coordinates
+- ✅ Coordinates being coarsened (like `time`) are handled correctly  
+- ✅ No data variables are incorrectly promoted to coordinates
+- ✅ The existing functionality remains intact
+
+This fix resolves the issue where `coarsen.construct` was incorrectly demoting non-dimensional coordinates to variables.

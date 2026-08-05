@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# populate.sh — Phase 1: Run base tasks chronologically to accumulate memory
+# SWE-Bench-CL base tasks are the first portion of each sequence (set by BASE_SPLIT in setup.sh).
+# Tasks are ordered by (sequence_id, sequence_position) — chronological within each repo.
+#
+# Env vars: ARM, MAINT, PILOT, PILOT_BASE, RESUME, MODEL, TASK_TIMEOUT, MAINT_TIMEOUT, DAILY_BATCH_SIZE
+set -euo pipefail
+
+DATA_DIR="/eval/data/swe-bench-cl"
+CHECKPOINT="/eval/raw/checkpoint.txt"
+TASK_FILE="$DATA_DIR/base_tasks.jsonl"
+BATCH_SIZE="${DAILY_BATCH_SIZE:-4}"
+PILOT_BASE="${PILOT_BASE:-0}"
+TURN=0
+
+# Cold arm skips population entirely
+if [ "$ARM" = "cold" ]; then
+    echo "[populate] ARM=cold — skipping Phase 1."
+    exit 0
+fi
+
+TOTAL=$(wc -l < "$TASK_FILE")
+if [ "$PILOT_BASE" -gt 0 ] && [ "$PILOT_BASE" -lt "$TOTAL" ]; then
+    echo "[populate] Pilot mode: running $PILOT_BASE of $TOTAL base tasks"
+    TOTAL="$PILOT_BASE"
+fi
+echo "[populate] Phase 1: $TOTAL base tasks, ARM=$ARM, MAINT=$MAINT"
+
+# Resume support
+START_LINE=1
+if [ "$RESUME" = "true" ] && [ -f "$CHECKPOINT" ]; then
+    START_LINE=$(cat "$CHECKPOINT")
+    echo "[populate] Resuming from task $START_LINE"
+fi
+
+# Compute batch count offset for resume (so daily maintenance triggers correctly)
+if [ "$START_LINE" -gt 1 ]; then
+    BATCH_COUNT=$(( (START_LINE - 1) % BATCH_SIZE ))
+else
+    BATCH_COUNT=0
+fi
+
+while IFS= read -r line; do
+    TURN=$((TURN + 1))
+
+    # Pilot base limit
+    if [ "$PILOT_BASE" -gt 0 ] && [ "$TURN" -gt "$PILOT_BASE" ]; then
+        break
+    fi
+
+    # Skip already-completed tasks on resume
+    if [ "$TURN" -lt "$START_LINE" ]; then
+        continue
+    fi
+
+    # Extract task fields
+    TASK_ID=$(echo "$line" | jq -r '.instance_id')
+    REPO=$(echo "$line" | jq -r '.repo' | tr '/' '_')
+    COMMIT=$(echo "$line" | jq -r '.base_commit')
+    ISSUE_FILE="/tmp/issue-${TASK_ID}.txt"
+    echo "$line" | jq -r '.problem_statement' > "$ISSUE_FILE"
+
+    echo "[populate] Task $TURN/$TOTAL: $TASK_ID"
+    /eval/scripts/invoke-task.sh "$TASK_ID" "$REPO" "$COMMIT" "$ISSUE_FILE" || true
+
+    # Snapshot
+    /eval/scripts/snapshot.sh "$TURN" "base: $TASK_ID"
+
+    # Write checkpoint
+    echo "$((TURN + 1))" > "$CHECKPOINT"
+
+    # Maintenance check
+    BATCH_COUNT=$((BATCH_COUNT + 1))
+    case "$MAINT" in
+        per-session)
+            echo "[populate] Maintenance after task $TURN"
+            /eval/scripts/maintenance.sh
+            /eval/scripts/snapshot.sh "${TURN}-maint" "maintenance after $TASK_ID"
+            ;;
+        daily)
+            if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
+                echo "[populate] Daily maintenance after batch (task $TURN)"
+                /eval/scripts/maintenance.sh
+                /eval/scripts/snapshot.sh "${TURN}-maint" "daily maintenance"
+                BATCH_COUNT=0
+            fi
+            ;;
+        none)
+            ;;
+    esac
+
+    rm -f "$ISSUE_FILE"
+done < "$TASK_FILE"
+
+echo "[populate] Phase 1 complete. $TURN tasks processed."

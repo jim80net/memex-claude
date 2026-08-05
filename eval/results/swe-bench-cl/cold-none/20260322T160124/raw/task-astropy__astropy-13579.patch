@@ -1,0 +1,114 @@
+diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b078c..f488c60c7f 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -246,12 +246,19 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+         world_arrays = tuple(map(np.asanyarray, world_arrays))
+         world_arrays_new = []
+         iworld_curr = -1
++
++        # Get the actual world coordinate values for dropped dimensions by
++        # calling pixel_to_world on the sliced pixel coordinates
++        dropped_world_coords = self._pixel_to_world_values_all(*[0]*len(self._pixel_keep))
++
+         for iworld in range(self._wcs.world_n_dim):
+             if iworld in self._world_keep:
+                 iworld_curr += 1
+                 world_arrays_new.append(world_arrays[iworld_curr])
+             else:
+-                world_arrays_new.append(1.)
++                # Use the actual world coordinate value for this dropped dimension
++                # instead of the arbitrary value 1.
++                world_arrays_new.append(dropped_world_coords[iworld])
+ 
+         world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
+diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
+index a354114962..efd0020306 100644
+--- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
+@@ -899,3 +899,84 @@ def test_pixel_to_world_values_different_int_types():
+     for int_coord, np64_coord in zip(int_sliced.pixel_to_world_values(*pixel_arrays),
+                                      np64_sliced.pixel_to_world_values(*pixel_arrays)):
+         assert all(int_coord == np64_coord)
++
++
++def test_world_to_pixel_coupled_dimensions():
++    """
++    Test for the issue where SlicedLowLevelWCS.world_to_pixel_values
++    returns incorrect results when the WCS has coupled dimensions.
++
++    This test reproduces the bug reported in GitHub issue regarding
++    inconsistent behavior when WCS has non-trivial PCij matrix that
++    couples spectral and spatial dimensions.
++    """
++    # Create a 3D WCS with coupling between spectral and spatial dimensions
++    # This is the exact WCS from the bug report
++    header_dict = {
++        'WCSAXES': 3,
++        'CRPIX1': 50.5,  # (100+1)/2
++        'CRPIX2': 13.0,  # (25+1)/2
++        'CRPIX3': 1.0,
++        'PC1_1': 0.0,
++        'PC1_2': -1.0,
++        'PC1_3': 0.0,
++        'PC2_1': 1.0,
++        'PC2_2': 0.0,
++        'PC2_3': -1.0,  # This couples spatial Y with spectral dimension
++        'CDELT1': 5,
++        'CDELT2': 5,
++        'CDELT3': 0.055,
++        'CUNIT1': 'arcsec',
++        'CUNIT2': 'arcsec',
++        'CUNIT3': 'Angstrom',
++        'CTYPE1': 'HPLN-TAN',
++        'CTYPE2': 'HPLT-TAN',
++        'CTYPE3': 'WAVE',
++        'CRVAL1': 0.0,
++        'CRVAL2': 0.0,
++        'CRVAL3': 1.05,
++    }
++
++    # Create WCS from header
++    header = Header(header_dict)
++    with warnings.catch_warnings():
++        warnings.simplefilter('ignore', FITSFixedWarning)
++        fits_wcs = WCS(header)
++
++    # Create test coordinate
++    from astropy.wcs.utils import wcs_to_celestial_frame
++    pt = SkyCoord(Tx=0*u.arcsec, Ty=0*u.arcsec,
++                  frame=wcs_to_celestial_frame(fits_wcs))
++
++    # Test 1: Get pixel coordinates from full 3D WCS
++    px_3d, py_3d, pz_3d = fits_wcs.world_to_pixel(pt, 1.05*u.Angstrom)
++
++    # Test 2: Create sliced WCS (remove spectral dimension by slicing at index 0)
++    from astropy.wcs.wcsapi import HighLevelWCSWrapper
++    ll_sliced_wcs = SlicedLowLevelWCS(fits_wcs, 0)  # Slice at first wavelength
++    hl_sliced_wcs = HighLevelWCSWrapper(ll_sliced_wcs)
++
++    # Test 3: Get pixel coordinates from sliced 2D WCS
++    px_2d, py_2d = hl_sliced_wcs.world_to_pixel(pt)
++
++    # Test 4: Verify the results are consistent
++    # Before the fix, px_2d would be ~1.8e+11 (essentially infinite)
++    # After the fix, px_2d should match px_3d
++    assert_allclose(px_2d, px_3d, rtol=1e-10,
++                    err_msg="X coordinate from sliced WCS doesn't match full WCS")
++    assert_allclose(py_2d, py_3d, rtol=1e-10,
++                    err_msg="Y coordinate from sliced WCS doesn't match full WCS")
++
++    # Test 5: Verify that the result is reasonable (not infinite/very large)
++    assert abs(px_2d) < 1e10, f"X coordinate is unexpectedly large: {px_2d}"
++    assert abs(py_2d) < 1e10, f"Y coordinate is unexpectedly large: {py_2d}"
++
++    # Test 6: Test round-trip consistency
++    px_recovered, py_recovered = hl_sliced_wcs.world_to_pixel(pt)
++    pt_recovered = hl_sliced_wcs.pixel_to_world(px_recovered, py_recovered)
++
++    # Check that we can round-trip the coordinate
++    assert_allclose(pt.Tx.arcsec, pt_recovered.Tx.arcsec, rtol=1e-10,
++                    err_msg="Round-trip failed for Tx coordinate")
++    assert_allclose(pt.Ty.arcsec, pt_recovered.Ty.arcsec, rtol=1e-10,
++                    err_msg="Round-trip failed for Ty coordinate")

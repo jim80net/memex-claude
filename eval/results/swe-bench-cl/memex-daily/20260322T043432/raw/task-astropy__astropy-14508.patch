@@ -1,0 +1,43 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced89..af91d81b58 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,38 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # Try the natural string representation first
++    str_repr = str(value)
++
++    # If the string representation is 20 characters or less, use it (with formatting)
++    if len(str_repr) <= 20:
++        # Handle scientific notation: normalize to uppercase E and ensure proper formatting
++        if "e" in str_repr.lower():
++            # Convert to uppercase E and ensure proper exponent formatting
++            if "e+" in str_repr:
++                str_repr = str_repr.replace("e+", "E+")
++            elif "e-" in str_repr:
++                str_repr = str_repr.replace("e-", "E-")
++            else:
++                str_repr = str_repr.replace("e", "E+")
++
++            # Ensure the exponent is zero-padded to two digits like in the original
++            if "E" in str_repr:
++                significand, exponent = str_repr.split("E")
++                if exponent[0] in ("+", "-"):
++                    sign = exponent[0]
++                    exponent = exponent[1:]
++                else:
++                    sign = "+"
++                str_repr = f"{significand}E{sign}{int(exponent):02d}"
++
++        # Make sure it has a decimal point for floats that don't naturally have one
++        elif "." not in str_repr:
++            str_repr += ".0"
++
++        return str_repr
++
++    # Fall back to the original behavior if str() is too long
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"

@@ -1,0 +1,44 @@
+Perfect! All validation tests pass. Now let me provide a summary of the fix I've implemented.
+
+## Summary
+
+I've successfully fixed the issue where `io.fits.Card` was using unnecessarily long string representations of floats, causing comment truncation. Here's what I implemented:
+
+### The Problem
+The original `_format_float()` function immediately used `f"{value:.16G}"` formatting, which created unnecessarily long representations like:
+- `0.009125` → `'0.009124999999999999'` (20 chars)
+
+This left only 28 characters for comments in HIERARCH cards, causing truncation.
+
+### The Solution
+I modified the `_format_float()` function in `/eval/workdir/astropy_astropy/astropy/io/fits/card.py` to:
+
+1. **Try `str(value)` first** - Use Python's natural string representation
+2. **Validate it** - Ensure it has a decimal point or E notation (FITS requirement)  
+3. **Check length** - Only use it if ≤ 20 characters
+4. **Fall back gracefully** - Use original logic if natural representation doesn't work
+
+### Results
+For the bug report case:
+- **Before**: `'0.009124999999999999'` (20 chars) → 28 chars for comment → **Comment truncated**
+- **After**: `'0.009125'` (8 chars) → 40 chars for comment → **Comment fits completely**
+- **Improvement**: 12 more characters available for comments
+
+### Tests Added
+I've added comprehensive tests to `/eval/workdir/astropy_astropy/astropy/io/fits/tests/test_header.py`:
+
+1. **`test_float_representation_optimization`** - Tests that floats use optimal representations
+2. **`test_hierarch_float_comment_not_truncated`** - Tests the specific HIERARCH card scenario from the bug report
+
+### Validation
+The fix:
+- ✅ Solves the specific bug report case
+- ✅ Maintains compatibility with existing behavior
+- ✅ Handles edge cases properly (scientific notation, very large numbers)
+- ✅ Respects the 20-character FITS value limit
+- ✅ Preserves all existing functionality
+
+The user can now create the exact FITS card from the bug report without comment truncation:
+```python
+fits.Card('HIERARCH ESO IFM CL RADIUS', 0.009125, '[m] radius arround actuator to avoid')
+```

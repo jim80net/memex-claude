@@ -1,0 +1,51 @@
+Perfect! I have successfully implemented the requested enhancement to add `get_antialiased` and `set_antialiased` methods to Text objects in matplotlib. Here's a summary of all the changes made:
+
+## ✅ Implementation Summary
+
+### **1. Text Class Enhancements**
+- **Added `get_antialiased()` method** - Returns the current antialiasing state
+- **Added `set_antialiased(antialiased)` method** - Sets antialiasing (supports `True`/`False`/`None`)
+- **Added `antialiased` parameter to constructor** - Allows setting antialiasing at creation time
+- **Added `_antialiased` attribute initialization** - Properly initialized in constructor and reset methods
+
+### **2. Graphics Context Integration**
+- **Modified `Text.draw()` method** - Now sets `gc.set_antialiased(self.get_antialiased())` to pass per-text antialiasing to backends
+- **Per-text antialiasing** - Each Text object can now have independent antialiasing settings
+
+### **3. Backend Updates**
+- **Updated backend_agg.py** - Now uses `gc.get_antialiased()` instead of global `rcParams['text.antialiased']`
+- **Updated backend_cairo.py** - Now uses `gc.get_antialiased()` instead of global `rcParams['text.antialiased']`  
+- **Mathtext compatibility** - Added temporary rcParams override in `draw_mathtext()` to maintain compatibility
+
+### **4. Annotation Inheritance**
+- **Automatic inheritance** - Annotation class inherits antialiasing functionality from Text without requiring changes (due to `**kwargs` forwarding)
+
+### **5. Comprehensive Tests**
+- **Basic functionality tests** - Test get/set methods work correctly
+- **rcParams integration test** - Verify `None` resets to global setting  
+- **Annotation inheritance test** - Confirm Annotations work with antialiasing
+- **Backend integration test** - Mock test to verify graphics context receives antialiasing setting
+
+## 🎯 Key Features
+
+**Per-Object Control**: Each Text/Annotation object can now have independent antialiasing settings
+```python
+text1 = Text(0, 0, "Sharp text", antialiased=False)
+text2 = Text(0, 1, "Smooth text", antialiased=True)
+```
+
+**Backward Compatibility**: Existing code continues to work unchanged, defaulting to global rcParams
+```python
+# Still works as before
+text = Text(0, 0, "Default behavior") 
+# Uses rcParams['text.antialiased']
+```
+
+**Flexible API**: Supports explicit boolean values and None for reset
+```python
+text.set_antialiased(True)   # Force antialiasing on
+text.set_antialiased(False)  # Force antialiasing off  
+text.set_antialiased(None)   # Reset to global rcParams
+```
+
+The implementation follows matplotlib's established patterns for other artist properties (like patches and lines) and maintains full backward compatibility while enabling the requested per-text antialiasing control.

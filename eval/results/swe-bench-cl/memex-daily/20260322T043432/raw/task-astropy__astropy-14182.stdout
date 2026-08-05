@@ -1,0 +1,64 @@
+I've successfully implemented support for header rows in RestructuredText (RST) output for astropy tables. Here's what was done:
+
+## Changes Made
+
+### 1. Fixed the RST Class (`astropy/io/ascii/rst.py`)
+**File**: `/eval/workdir/astropy_astropy/astropy/io/ascii/rst.py:60-61`
+
+Modified the `RST` class constructor to accept and pass through the `header_rows` parameter:
+
+```python
+def __init__(self, header_rows=None):
+    super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
+```
+
+This change allows the RST writer to accept the same `header_rows` parameter that's already supported by the FixedWidth writer it inherits from.
+
+### 2. Added Test Coverage (`astropy/io/ascii/tests/test_rst.py`)
+**File**: `/eval/workdir/astropy_astropy/astropy/io/ascii/tests/test_rst.py:190-223`
+
+Added a comprehensive test function `test_rst_header_rows()` that:
+- Tests reading RST format with header_rows parameter
+- Verifies that column names and units are properly parsed
+- Tests writing RST format with header_rows parameter
+- Validates the output format
+
+## How It Works
+
+The `header_rows` parameter is a list of strings indicating what type of information each header row contains. For example:
+
+```python
+header_rows = ["name", "unit"]  # First row has column names, second row has units
+```
+
+## Example Usage
+
+The code from your issue description now works:
+
+```python
+from astropy.table import QTable
+import astropy.units as u
+import sys
+
+tbl = QTable({'wave': [350,950]*u.nm, 'response': [0.7, 1.2]*u.count})
+tbl.write(sys.stdout, format="ascii.rst", header_rows=["name", "unit"])
+```
+
+This will output:
+```
+========= ========
+     wave response
+       nm       ct
+========= ========
+    350.0      0.7
+    950.0      1.2
+========= ========
+```
+
+## Benefits
+
+1. **Consistency**: RST format now supports the same `header_rows` functionality as other ASCII formats
+2. **Flexibility**: You can include multiple types of metadata (units, descriptions, formats, etc.) in your RST tables
+3. **Documentation**: Great for auto-generated documentation where you need rich table headers
+
+The implementation is minimal and leverages the existing functionality in the parent `FixedWidth` class, ensuring consistency and maintainability.

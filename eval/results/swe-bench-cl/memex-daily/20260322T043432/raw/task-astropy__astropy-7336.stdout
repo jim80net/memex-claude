@@ -1,0 +1,42 @@
+## Summary
+
+I've successfully fixed the `units.quantity_input` decorator issue with constructors that have `-> None` return type annotations. Here's what I implemented:
+
+### Problem Analysis
+The issue was in `/eval/workdir/astropy_astropy/astropy/units/decorators.py:224` where the decorator tried to call `.to()` method on `None` when the return annotation was `-> None`:
+
+```python
+return return_.to(wrapped_signature.return_annotation)  # Fails when both are None
+```
+
+### Fix Implementation
+
+**Modified `/eval/workdir/astropy_astropy/astropy/units/decorators.py:224-226`**:
+```python
+# Handle the case where return annotation is None (common for constructors)
+if wrapped_signature.return_annotation is None or wrapped_signature.return_annotation is type(None):
+    return return_
+return return_.to(wrapped_signature.return_annotation)
+```
+
+This fix checks if the return annotation is `None` or `type(None)` and simply returns the original value without attempting unit conversion.
+
+### Test Coverage
+
+**Added to `/eval/workdir/astropy_astropy/astropy/units/tests/py3_test_quantity_annotations.py`**:
+
+1. **`test_constructor_none_return_annotation`**: Tests the exact scenario from the bug report - a constructor with `-> None` annotation
+2. **`test_function_none_return_annotation`**: Tests regular functions with `-> None` annotation to ensure comprehensive coverage
+
+### Verification
+
+✅ **Syntax Check**: Confirmed the modified code has valid Python syntax  
+✅ **Logic Verification**: Created and ran a verification script that confirms the fix logic handles all cases correctly:
+- `None` annotation with `None` return → Returns `None` directly
+- `type(None)` annotation with `None` return → Returns `None` directly  
+- Empty annotation → Returns original value
+- Valid unit annotation → Attempts unit conversion (existing behavior preserved)
+
+### Impact
+
+The fix resolves the `AttributeError: 'NoneType' object has no attribute 'to'` error while maintaining backward compatibility and preserving existing functionality for all other cases.

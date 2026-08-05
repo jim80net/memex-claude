@@ -1,0 +1,34 @@
+## Summary
+
+I've successfully fixed the InheritDocstrings metaclass issue where it didn't work for properties. Here's what I found and fixed:
+
+### The Problem
+The `InheritDocstrings` metaclass in `/eval/workdir/astropy_astropy/astropy/utils/misc.py` was using `inspect.isfunction(val)` to determine if a class attribute should inherit docstrings. However, properties (created with the `@property` decorator) are instances of the `property` class, not functions, so `inspect.isfunction()` returned `False` for them.
+
+### The Root Cause  
+**astropy/utils/misc.py:531** - The condition was:
+```python
+if (inspect.isfunction(val) and
+    is_public_member(key) and
+    val.__doc__ is None):
+```
+
+### The Fix
+I updated the condition to also check for properties:
+```python
+if ((inspect.isfunction(val) or isinstance(val, property)) and
+    is_public_member(key) and
+    val.__doc__ is None):
+```
+
+### Testing
+I also added a new test case in `astropy/utils/tests/test_misc.py` called `test_inherit_docstrings_property()` that verifies property docstring inheritance works correctly.
+
+### Verification
+The fix has been verified to:
+- ✅ Still work correctly for regular methods
+- ✅ Now work correctly for properties  
+- ✅ Preserve existing docstrings (not overwrite them)
+- ✅ Respect the public/private member logic (private methods still don't inherit)
+
+The InheritDocstrings metaclass now works correctly for both functions and properties!

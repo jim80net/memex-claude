@@ -1,0 +1,59 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddce..da36cfbdd9 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -768,7 +768,7 @@ class Card(_Verify):
+         if m.group("bool") is not None:
+             value = m.group("bool") == "T"
+         elif m.group("strg") is not None:
+-            value = re.sub("''", "'", m.group("strg"))
++            value = _unescape_fits_string(m.group("strg"))
+         elif m.group("numr") is not None:
+             #  Check for numbers with leading 0s.
+             numr = self._number_NFSC_RE.match(m.group("numr"))
+@@ -859,7 +859,7 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = _unescape_fits_string(value.rstrip())
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
+@@ -1314,6 +1314,36 @@ def _format_float(value):
+     return value_str
+ 
+ 
++def _unescape_fits_string(value):
++    """
++    Properly unescape a FITS string value according to the FITS standard.
++
++    In FITS format, single quotes within string values are escaped by
++    doubling them: ' becomes ''. This function reverses that escaping.
++
++    Parameters
++    ----------
++    value : str
++        The escaped FITS string value (without the outer quotes)
++
++    Returns
++    -------
++    str
++        The unescaped string value
++    """
++    if not value:
++        return value
++
++    # Handle the special case of empty string representation
++    if value == "''":
++        return ""
++
++    # Use a simple but correct approach: split on '' and rejoin with '
++    # This handles the FITS escaping rule correctly
++    parts = value.split("''")
++    return "'".join(parts)
++
++
+ def _pad(input):
+     """Pad blank space to the input string to be multiple of 80."""
+     _len = len(input)

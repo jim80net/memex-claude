@@ -1,0 +1,50 @@
+## Summary
+
+I've successfully fixed the SQLite `loaddata` crash when table names are SQL keywords! 
+
+### 🐛 Problem
+When Django models have names that are SQL keywords (like "Order"), `loaddata` would crash with:
+```
+sqlite3.OperationalError: near "order": syntax error
+```
+
+### 🔍 Root Cause  
+The `check_constraints` method in `django/db/backends/sqlite3/base.py` was using table names directly in PRAGMA statements without proper quoting:
+- `PRAGMA foreign_key_check(order)` ← fails for keyword table names
+- `PRAGMA foreign_key_list(order)` ← fails for keyword table names
+
+### ✅ Solution
+Fixed three lines in `django/db/backends/sqlite3/base.py` by using Django's built-in `quote_name` method:
+
+**base.py:330**
+```python
+# Before:
+cursor.execute('PRAGMA foreign_key_check(%s)' % table_name).fetchall()
+
+# After: 
+cursor.execute('PRAGMA foreign_key_check(%s)' % self.ops.quote_name(table_name)).fetchall()
+```
+
+**base.py:336**
+```python
+# Before:
+cursor.execute('PRAGMA foreign_key_list(%s)' % table_name)
+
+# After:
+cursor.execute('PRAGMA foreign_key_list(%s)' % self.ops.quote_name(table_name))
+```
+
+**base.py:342**
+```python  
+# Before:
+'SELECT %s, %s FROM %s WHERE rowid = %%s' % (primary_key_column_name, column_name, table_name)
+
+# After:
+'SELECT %s, %s FROM %s WHERE rowid = %%s' % (primary_key_column_name, column_name, self.ops.quote_name(table_name))
+```
+
+### 🧪 Testing
+- Added a comprehensive test in `tests/backends/sqlite/tests.py::SQLKeywordTableNameTests` that verifies constraint checking works with SQL keyword table names
+- Verified the fix with manual testing showing PRAGMA statements now work correctly with quoted table names
+
+The fix follows Django's existing pattern and ensures SQL keyword table names are properly quoted in all SQLite PRAGMA statements! 🎉

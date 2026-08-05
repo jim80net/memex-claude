@@ -1,0 +1,87 @@
+diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+index a308e27297..45bea36085 100644
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,7 +242,7 @@ def _cstack(left, right):
+         cright = _coord_matrix(right, 'right', noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+ 
+diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
+index 8dfe5c8626..677a03b891 100644
+--- a/astropy/modeling/tests/test_separable.py
++++ b/astropy/modeling/tests/test_separable.py
+@@ -148,3 +148,69 @@ def test_custom_model_separable():
+ 
+     assert not model_c().separable
+     assert np.all(separability_matrix(model_c()) == [True, True])
++
++
++def test_nested_compound_model_separability():
++    """
++    Test that separability_matrix works correctly for nested compound models.
++
++    This tests the bug where:
++    cm = Linear1D(10) & Linear1D(5)
++    nested = Pix2Sky_TAN() & cm
++
++    Should have the same separability as:
++    flat = Pix2Sky_TAN() & Linear1D(10) & Linear1D(5)
++    """
++    # Create the models
++    linear1 = models.Linear1D(10)
++    linear2 = models.Linear1D(5)
++    pix2sky = models.Pix2Sky_TAN()
++
++    # Create compound model
++    cm = linear1 & linear2
++
++    # Create the two equivalent models
++    flat_model = pix2sky & linear1 & linear2
++    nested_model = pix2sky & cm
++
++    # Get separability matrices
++    flat_sep = separability_matrix(flat_model)
++    nested_sep = separability_matrix(nested_model)
++
++    # They should be equal
++    assert_allclose(flat_sep, nested_sep)
++
++    # Check the expected structure - Pix2Sky_TAN affects first 2 inputs/outputs,
++    # Linear1D models are independent for the remaining inputs/outputs
++    expected = np.array([
++        [True,  True, False, False],
++        [True,  True, False, False],
++        [False, False, True, False],
++        [False, False, False, True]
++    ])
++
++    assert_allclose(flat_sep, expected)
++    assert_allclose(nested_sep, expected)
++
++
++def test_multiple_nested_compound_models():
++    """
++    Test separability with multiple levels of nesting.
++    """
++    # Create nested compound models
++    cm1 = models.Linear1D(1) & models.Linear1D(2)
++    cm2 = models.Linear1D(3) & models.Linear1D(4)
++    deeply_nested = cm1 & cm2
++
++    # Compare with flat equivalent
++    flat_equivalent = models.Linear1D(1) & models.Linear1D(2) & models.Linear1D(3) & models.Linear1D(4)
++
++    flat_sep = separability_matrix(flat_equivalent)
++    nested_sep = separability_matrix(deeply_nested)
++
++    assert_allclose(flat_sep, nested_sep)
++
++    # Should be a diagonal matrix for independent Linear1D models
++    expected = np.eye(4, dtype=bool)
++    assert_allclose(flat_sep, expected)
++    assert_allclose(nested_sep, expected)

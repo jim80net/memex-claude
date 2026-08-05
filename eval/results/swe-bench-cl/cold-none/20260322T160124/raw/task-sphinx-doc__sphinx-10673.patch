@@ -1,0 +1,114 @@
+diff --git a/sphinx/directives/other.py b/sphinx/directives/other.py
+index 35e16e623..75e6755af 100644
+--- a/sphinx/directives/other.py
++++ b/sphinx/directives/other.py
+@@ -122,13 +122,19 @@ class TocTree(SphinxDirective):
+                     if excluded(self.env.doc2path(docname, False)):
+                         message = __('toctree contains reference to excluded document %r')
+                         subtype = 'excluded'
++                        logger.warning(message, docname, type='toc', subtype=subtype,
++                                       location=toctree)
++                        self.env.note_reread()
++                    elif self.env.has_special_index_page(docname):
++                        # This is a special index page (genindex, modindex, search)
++                        # Add it to entries without warning
++                        toctree['entries'].append((title, docname))
+                     else:
+                         message = __('toctree contains reference to nonexisting document %r')
+                         subtype = 'not_readable'
+-
+-                    logger.warning(message, docname, type='toc', subtype=subtype,
+-                                   location=toctree)
+-                    self.env.note_reread()
++                        logger.warning(message, docname, type='toc', subtype=subtype,
++                                       location=toctree)
++                        self.env.note_reread()
+                 else:
+                     if docname in all_docnames:
+                         all_docnames.remove(docname)
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 1a1dd755f..276661704 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -508,6 +508,33 @@ class BuildEnvironment:
+         except KeyError as exc:
+             raise ExtensionError(__('Domain %r is not registered') % domainname) from exc
+ 
++    def has_special_index_page(self, docname: str) -> bool:
++        """Check if a document name refers to a special auto-generated index page.
++
++        Returns True if the docname refers to one of the special index pages:
++        - 'genindex': the general index page
++        - 'search': the search page
++        - 'modindex' or 'py-modindex': the module index page (Python domain)
++        """
++        if docname == 'genindex':
++            # Check if general index generation is enabled
++            return self.config.html_use_index
++        elif docname == 'search':
++            # Search page is generally available for HTML builders
++            # We assume search is available if we're processing toctrees
++            return True
++        elif docname in ('modindex', 'py-modindex'):
++            # Check if Python domain is available and has modules
++            try:
++                py_domain = self.get_domain('py')
++                # Check if there are any modules registered in the Python domain
++                return bool(py_domain.data.get('modules', {}))
++            except ExtensionError:
++                # Python domain not registered
++                return False
++
++        return False
++
+     # --------- RESOLVING REFERENCES AND TOCTREES ------------------------------
+ 
+     def get_doctree(self, docname: str) -> nodes.document:
+diff --git a/sphinx/environment/adapters/toctree.py b/sphinx/environment/adapters/toctree.py
+index 9678e3c7c..313e9b871 100644
+--- a/sphinx/environment/adapters/toctree.py
++++ b/sphinx/environment/adapters/toctree.py
+@@ -167,12 +167,17 @@ class TocTree:
+                     # this is raised if the included file does not exist
+                     if excluded(self.env.doc2path(ref, False)):
+                         message = __('toctree contains reference to excluded document %r')
++                        logger.warning(message, ref, location=toctreenode)
+                     elif not included(self.env.doc2path(ref, False)):
+                         message = __('toctree contains reference to non-included document %r')
++                        logger.warning(message, ref, location=toctreenode)
++                    elif self.env.has_special_index_page(ref):
++                        # This is a special index page (genindex, modindex, search)
++                        # Skip warning for these auto-generated pages
++                        pass
+                     else:
+                         message = __('toctree contains reference to nonexisting document %r')
+-
+-                    logger.warning(message, ref, location=toctreenode)
++                        logger.warning(message, ref, location=toctreenode)
+                 else:
+                     # if titles_only is given, only keep the main title and
+                     # sub-toctrees
+diff --git a/tests/test_toctree.py b/tests/test_toctree.py
+index 39d0916d2..8f5367b5c 100644
+--- a/tests/test_toctree.py
++++ b/tests/test_toctree.py
+@@ -37,3 +37,19 @@ def test_numbered_toctree(app, status, warning):
+     index = re.sub(':numbered:.*', ':numbered: 1', index)
+     (app.srcdir / 'index.rst').write_text(index, encoding='utf8')
+     app.builder.build_all()
++
++
++@pytest.mark.sphinx('html', testroot='toctree-special-indexes')
++def test_toctree_special_indexes(app, status, warning):
++    """Test that special index pages (genindex, modindex, search) can be included
++    in toctrees without generating warnings."""
++    app.builder.build_all()
++
++    # Check that no warnings were generated about nonexisting documents
++    warning_output = warning.getvalue()
++    assert 'toctree contains reference to nonexisting document' not in warning_output
++
++    # Specifically check for the special index pages
++    assert 'genindex' not in warning_output or 'nonexisting' not in warning_output
++    assert 'modindex' not in warning_output or 'nonexisting' not in warning_output
++    assert 'search' not in warning_output or 'nonexisting' not in warning_output

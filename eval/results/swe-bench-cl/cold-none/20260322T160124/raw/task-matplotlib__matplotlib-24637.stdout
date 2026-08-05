@@ -1,0 +1,61 @@
+## Summary
+
+I've successfully investigated and fixed the AnnotationBbox gid issue you reported. Here's what I found and implemented:
+
+### The Problem
+The `AnnotationBbox.draw()` method was not wrapping its drawing operations with `renderer.open_group()` and `renderer.close_group()` calls, which are necessary for passing the gid attribute to the SVG renderer. This meant that even when you called `ab.set_gid('My_label')`, the gid wouldn't appear in the generated SVG output.
+
+### The Fix
+I updated the `AnnotationBbox.draw()` method in `/eval/workdir/matplotlib_matplotlib/lib/matplotlib/offsetbox.py` (lines 1449-1467) to properly wrap the drawing operations:
+
+```python
+def draw(self, renderer):
+    # docstring inherited
+    if renderer is not None:
+        self._renderer = renderer
+    if not self.get_visible() or not self._check_xy(renderer):
+        return
+
+    renderer.open_group('annotationbbox', gid=self.get_gid())
+    try:
+        self.update_positions(renderer)
+        if self.arrow_patch is not None:
+            if self.arrow_patch.figure is None and self.figure is not None:
+                self.arrow_patch.figure = self.figure
+            self.arrow_patch.draw(renderer)
+        self.patch.draw(renderer)
+        self.offsetbox.draw(renderer)
+    finally:
+        renderer.close_group('annotationbbox')
+    self.stale = False
+```
+
+This follows the same pattern used by other matplotlib artists like `Text`, `Line2D`, `Patch`, etc.
+
+### Verification
+I created verification scripts that confirm:
+1. ✅ The fix properly calls `renderer.open_group('annotationbbox', gid=self.get_gid())`
+2. ✅ The fix properly calls `renderer.close_group('annotationbbox')`  
+3. ✅ The fix uses try/finally to ensure cleanup even if drawing fails
+4. ✅ The fix works correctly whether gid is set or None
+
+### Other Classes Investigated
+I also checked other classes in `offsetbox.py` to see if they had similar issues. I found that:
+
+- **OffsetBox** (base class) also lacks gid handling, but matplotlib's test suite specifically excludes OffsetBox objects from gid testing, suggesting this is intentional
+- **AnchoredOffsetbox** and other subclasses inherit from OffsetBox and have the same pattern
+- **AnnotationBbox** was unique because it inherits from `Artist` directly (not just through OffsetBox) and is intended to be a standalone SVG element
+
+### Impact
+With this fix, your example code will now work correctly:
+
+```python
+ab = AnnotationBbox(imagebox, xy, ...)
+ab.set_gid('My_label')
+ax.add_artist(ab)
+fig.savefig("example.svg", format="svg")
+```
+
+The SVG output will now contain `gid="My_label"` on the AnnotationBbox group, allowing you to access and manipulate it via JavaScript or CSS as intended.
+
+This fix aligns with the broader effort mentioned in PR #15087 to ensure all matplotlib artists properly pass their gid attributes to renderers.

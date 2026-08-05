@@ -1,0 +1,75 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddce..40a4d85f5e 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -859,7 +859,7 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
+@@ -870,8 +870,9 @@ class Card(_Verify):
+             if keyword in self._commentary_keywords:
+                 valuecomment = "".join(values)
+             else:
+-                # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # CONTINUE card - unescape quotes after concatenating all values
++                concatenated_value = ''.join(values).replace("''", "'")
++                valuecomment = f"'{concatenated_value}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
+diff --git a/astropy/io/fits/tests/test_header.py b/astropy/io/fits/tests/test_header.py
+index c573100c91..ea83164def 100644
+--- a/astropy/io/fits/tests/test_header.py
++++ b/astropy/io/fits/tests/test_header.py
+@@ -626,6 +626,45 @@ class TestHeaderFunctions(FitsTestCase):
+             "CONTINUE  '' / &long comment &                                                  "
+         )
+ 
++    def test_double_single_quote_consistency(self):
++        """
++        Regression test for double single-quote handling in CONTINUE cards.
++        This tests the issue where double single quotes ('') at the end of strings
++        get inconsistently handled when the string gets split across CONTINUE cards.
++
++        See: https://github.com/astropy/astropy/issues/xxxxx
++        """
++
++        # Test cases that previously failed due to improper quote escaping
++        # when the escaped quotes were split across CONTINUE cards
++        failing_cases = [64, 65, 66, 67, 68, 69]
++
++        for n in failing_cases:
++            original_value = "x" * n + "''"
++
++            # Create a card with the value containing double quotes at the end
++            card1 = fits.Card('CONFIG', original_value)
++
++            # Convert to string and parse back - should be identical
++            card2 = fits.Card.fromstring(str(card1))
++
++            assert card1.value == card2.value, (
++                f"Double quote handling failed for n={n}: "
++                f"original={original_value!r}, parsed={card2.value!r}"
++            )
++
++        # Test case with double quotes in the middle of a long string
++        for n in range(50, 70):
++            original_value = "x" * n + "''" + "x" * 10
++
++            card1 = fits.Card('CONFIG', original_value)
++            card2 = fits.Card.fromstring(str(card1))
++
++            assert card1.value == card2.value, (
++                f"Double quote handling failed for middle quotes n={n}: "
++                f"original={original_value!r}, parsed={card2.value!r}"
++            )
++
+     def test_hierarch_card_creation(self):
+         # Test automatic upgrade to hierarch card
+         with pytest.warns(
