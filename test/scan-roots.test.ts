@@ -7,11 +7,9 @@ import {
 import { buildClaudeScanRoots } from "../src/core/scan-roots.ts";
 
 describe("buildClaudeScanRoots", () => {
-  // Deployment-neutral synthetic home for absolute-path fixtures.
-  const testHome = "/test-home";
-  const cwd = resolve(testHome, "project");
-  const claudeHome = resolve(testHome, ".claude");
-  const syncRepoDir = resolve(testHome, ".local", "share", "memex-claude");
+  const cwd = resolve("/home/user/project");
+  const claudeHome = resolve("/home/user/.claude");
+  const syncRepoDir = resolve("/home/user/.local/share/memex-claude");
 
   it("labels claude-global, claude-project, and sync-skills roots", () => {
     const paths = {

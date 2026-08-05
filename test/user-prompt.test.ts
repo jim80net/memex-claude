@@ -343,7 +343,7 @@ describe("handleUserPrompt", () => {
 
   it("skill teaser with unknown-root handle degrades to raw location without dropping other results", async () => {
     const unknownHandle = "memex://stale-catalog-key/weather/SKILL.md";
-    const registry = [{ key: "claude-global", rootPath: "/test-home/.claude/skills" }];
+    const registry = [{ key: "claude-global", rootPath: "/home/user/.claude/skills" }];
 
     const matches: SkillSearchResult[] = [
       {
@@ -386,10 +386,10 @@ describe("handleUserPrompt", () => {
   });
 
   it("skill teaser resolves memex:// handle to absolute path for display", async () => {
-    const absolute = resolve("/test-home/.claude/skills/weather/SKILL.md");
+    const absolute = resolve("/home/user/.claude/skills/weather/SKILL.md");
     const handle = "memex://claude-global/weather/SKILL.md";
     const registry = [
-      { key: "claude-global", rootPath: resolve("/test-home/.claude/skills") },
+      { key: "claude-global", rootPath: resolve("/home/user/.claude/skills") },
     ];
 
     const match: SkillSearchResult = {
